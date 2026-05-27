@@ -1,0 +1,255 @@
+import 'dart:math';
+import 'package:flutter/material.dart';
+import '../engine/sudoku_engine.dart';
+import '../state/game_store.dart';
+
+enum GameStatus { playing, won, lost }
+
+class UndoEntry {
+  final int r, c;
+  final String type; // 'val' or 'note'
+  final int prevVal;
+  final int nextVal;
+  final Set<int> prevNotes;
+  final Set<int> nextNotes;
+
+  UndoEntry({
+    required this.r,
+    required this.c,
+    required this.type,
+    this.prevVal = 0,
+    this.nextVal = 0,
+    Set<int>? prevNotes,
+    Set<int>? nextNotes,
+  })  : prevNotes = prevNotes ?? {},
+        nextNotes = nextNotes ?? {};
+}
+
+class GameState extends ChangeNotifier {
+  List<List<int>> puzzle = [];
+  List<List<int>> solution = [];
+  List<List<int>> board = [];
+  List<List<bool>> isGiven = [];
+  List<List<Set<int>>> notes = [];
+  Set<String> hintCells = {};
+  List<UndoEntry> undoStack = [];
+
+  int? selectedRow;
+  int? selectedCol;
+  int mistakes = 0;
+  int seconds = 0;
+  bool paused = false;
+  bool notesMode = false;
+  bool gameOver = false;
+  String difficulty = 'easy';
+  GameStatus status = GameStatus.playing;
+
+  // Challenge mode
+  bool challengeMode = false;
+  int? challengeSeed;
+  String? challengePin;
+
+  static const maxMistakes = 3;
+
+  bool get hasSelection => selectedRow != null && selectedCol != null;
+  int get selectedValue => hasSelection ? board[selectedRow!][selectedCol!] : 0;
+
+  void newGame(String diff, {int? seed, String? pin}) {
+    difficulty = diff;
+    challengeMode = seed != null;
+    challengeSeed = seed;
+    challengePin = pin;
+
+    final engine = SudokuEngine(seed: seed);
+    engine.generate(diff);
+
+    puzzle = engine.puzzle;
+    solution = engine.solution;
+    board = puzzle.map((r) => List<int>.from(r)).toList();
+    isGiven = puzzle.map((r) => r.map((v) => v != 0).toList()).toList();
+    notes = List.generate(9, (_) => List.generate(9, (_) => <int>{}));
+    hintCells = {};
+    undoStack = [];
+    selectedRow = null;
+    selectedCol = null;
+    mistakes = 0;
+    seconds = 0;
+    paused = false;
+    notesMode = false;
+    gameOver = false;
+    status = GameStatus.playing;
+    notifyListeners();
+  }
+
+  void loadFromSaved(SavedGame saved) {
+    puzzle = saved.puzzle;
+    solution = saved.solution;
+    board = saved.board;
+    isGiven = saved.isGiven;
+    notes = saved.notes.map((r) => r.map((c) => Set<int>.from(c)).toList()).toList();
+    hintCells = Set<String>.from(saved.hintCells);
+    difficulty = saved.difficulty;
+    seconds = saved.seconds;
+    mistakes = saved.mistakes;
+    undoStack = [];
+    selectedRow = null;
+    selectedCol = null;
+    paused = false;
+    notesMode = false;
+    gameOver = false;
+    challengeMode = false;
+    status = GameStatus.playing;
+    notifyListeners();
+  }
+
+  SavedGame toSavedGame() => SavedGame(
+    puzzle: puzzle,
+    solution: solution,
+    board: board,
+    isGiven: isGiven,
+    notes: notes.map((r) => r.map((s) => s.toList()).toList()).toList(),
+    difficulty: difficulty,
+    seconds: seconds,
+    mistakes: mistakes,
+    hintCells: hintCells.toList(),
+  );
+
+  void selectCell(int r, int c) {
+    if (paused || gameOver) return;
+    selectedRow = r;
+    selectedCol = c;
+    notifyListeners();
+  }
+
+  void inputNumber(int n) {
+    if (!hasSelection || gameOver || paused) return;
+    final r = selectedRow!, c = selectedCol!;
+    if (isGiven[r][c]) return;
+
+    if (notesMode) {
+      if (board[r][c] != 0) return;
+      final prev = Set<int>.from(notes[r][c]);
+      if (notes[r][c].contains(n)) {
+        notes[r][c].remove(n);
+      } else {
+        notes[r][c].add(n);
+      }
+      undoStack.add(UndoEntry(r: r, c: c, type: 'note', prevNotes: prev, nextNotes: Set.from(notes[r][c])));
+    } else {
+      final prevVal = board[r][c];
+      final prevNotes = Set<int>.from(notes[r][c]);
+      board[r][c] = n;
+      notes[r][c].clear();
+      undoStack.add(UndoEntry(r: r, c: c, type: 'val', prevVal: prevVal, nextVal: n, prevNotes: prevNotes));
+
+      if (n != solution[r][c]) {
+        mistakes++;
+        if (mistakes >= maxMistakes) {
+          gameOver = true;
+          status = GameStatus.lost;
+          // Reveal solution
+          for (int rr = 0; rr < 9; rr++) {
+            for (int cc = 0; cc < 9; cc++) {
+              if (!isGiven[rr][cc]) board[rr][cc] = solution[rr][cc];
+            }
+          }
+        }
+      } else {
+        _checkWin();
+      }
+    }
+    notifyListeners();
+  }
+
+  void eraseCell() {
+    if (!hasSelection || gameOver || paused) return;
+    final r = selectedRow!, c = selectedCol!;
+    if (isGiven[r][c]) return;
+
+    if (board[r][c] != 0) {
+      undoStack.add(UndoEntry(r: r, c: c, type: 'val', prevVal: board[r][c], nextVal: 0, prevNotes: Set.from(notes[r][c])));
+      board[r][c] = 0;
+    } else if (notes[r][c].isNotEmpty) {
+      undoStack.add(UndoEntry(r: r, c: c, type: 'note', prevNotes: Set.from(notes[r][c]), nextNotes: {}));
+      notes[r][c].clear();
+    }
+    notifyListeners();
+  }
+
+  void undo() {
+    if (undoStack.isEmpty || gameOver) return;
+    final mv = undoStack.removeLast();
+    if (mv.type == 'val') {
+      if (mv.nextVal != 0 && mv.nextVal != solution[mv.r][mv.c]) {
+        mistakes = (mistakes - 1).clamp(0, maxMistakes);
+      }
+      board[mv.r][mv.c] = mv.prevVal;
+      notes[mv.r][mv.c] = mv.prevNotes;
+    } else {
+      notes[mv.r][mv.c] = mv.prevNotes;
+    }
+    selectedRow = mv.r;
+    selectedCol = mv.c;
+    notifyListeners();
+  }
+
+  void toggleNotes() {
+    notesMode = !notesMode;
+    notifyListeners();
+  }
+
+  void giveHint() {
+    if (gameOver || paused) return;
+    final empty = <Point<int>>[];
+    for (int r = 0; r < 9; r++) {
+      for (int c = 0; c < 9; c++) {
+        if (!isGiven[r][c] && board[r][c] == 0) empty.add(Point(r, c));
+      }
+    }
+    if (empty.isEmpty) return;
+    final p = empty[Random().nextInt(empty.length)];
+    final r = p.x, c = p.y;
+    undoStack.add(UndoEntry(r: r, c: c, type: 'val', prevVal: 0, nextVal: solution[r][c], prevNotes: Set.from(notes[r][c])));
+    board[r][c] = solution[r][c];
+    notes[r][c].clear();
+    hintCells.add('$r,$c');
+    selectedRow = r;
+    selectedCol = c;
+    _checkWin();
+    notifyListeners();
+  }
+
+  void togglePause() {
+    if (gameOver) return;
+    paused = !paused;
+    notifyListeners();
+  }
+
+  void tick() {
+    if (!paused && !gameOver) {
+      seconds++;
+      notifyListeners();
+    }
+  }
+
+  void _checkWin() {
+    for (int r = 0; r < 9; r++) {
+      for (int c = 0; c < 9; c++) {
+        if (board[r][c] != solution[r][c]) return;
+      }
+    }
+    gameOver = true;
+    status = GameStatus.won;
+  }
+
+  int countForNumber(int n) {
+    int count = 0;
+    for (int r = 0; r < 9; r++) {
+      for (int c = 0; c < 9; c++) {
+        if (board[r][c] == n) count++;
+      }
+    }
+    return count;
+  }
+}
+
