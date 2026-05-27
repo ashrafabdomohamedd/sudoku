@@ -62,18 +62,16 @@ class _ChallengeModalState extends State<ChallengeModal> {
           children: [
             const Text('⚔️', style: TextStyle(fontSize: 50)),
             const SizedBox(height: 8),
-            Text('Challenge Mode', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: c.text)),
+            Text(
+              'Challenge Mode',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: c.text),
+            ),
             const SizedBox(height: 16),
             // Tabs
             Container(
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(10)),
-              child: Row(
-                children: [
-                  _tab('Create', _isCreateTab),
-                  _tab('Join', !_isCreateTab),
-                ],
-              ),
+              child: Row(children: [_tab('Create', _isCreateTab), _tab('Join', !_isCreateTab)]),
             ),
             const SizedBox(height: 18),
             if (_isCreateTab) _buildCreate() else _buildJoin(),
@@ -83,9 +81,16 @@ class _ChallengeModalState extends State<ChallengeModal> {
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 13),
-                decoration: BoxDecoration(color: c.surface, border: Border.all(color: c.border, width: 1.5), borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  border: Border.all(color: c.border, width: 1.5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 alignment: Alignment.center,
-                child: Text('Cancel', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: c.text)),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: c.text),
+                ),
               ),
             ),
           ],
@@ -106,7 +111,10 @@ class _ChallengeModalState extends State<ChallengeModal> {
             boxShadow: active ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)] : null,
           ),
           alignment: Alignment.center,
-          child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: active ? c.primary : c.textMuted)),
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: active ? c.primary : c.textMuted),
+          ),
         ),
       ),
     );
@@ -116,7 +124,11 @@ class _ChallengeModalState extends State<ChallengeModal> {
     if (!_generated) {
       return Column(
         children: [
-          Text('Choose difficulty for the challenge', style: TextStyle(fontSize: 13, color: c.textMuted), textAlign: TextAlign.center),
+          Text(
+            'Choose difficulty for the challenge',
+            style: TextStyle(fontSize: 13, color: c.textMuted),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 12),
           _diffBar(),
           const SizedBox(height: 16),
@@ -126,7 +138,11 @@ class _ChallengeModalState extends State<ChallengeModal> {
     }
     return Column(
       children: [
-        Text('Share with your friend — they scan the QR or enter the PIN', style: TextStyle(fontSize: 13, color: c.textMuted), textAlign: TextAlign.center),
+        Text(
+          'Share with your friend — they scan the QR or enter the PIN',
+          style: TextStyle(fontSize: 13, color: c.textMuted),
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(10),
@@ -134,11 +150,26 @@ class _ChallengeModalState extends State<ChallengeModal> {
           child: QrImageView(data: 'sudoku://challenge?pin=$_pin', version: QrVersions.auto, size: 160),
         ),
         const SizedBox(height: 8),
-        Row(children: [Expanded(child: Divider(color: c.border)), Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text('or enter PIN', style: TextStyle(fontSize: 11, color: c.textMuted))), Expanded(child: Divider(color: c.border))]),
+        Row(
+          children: [
+            Expanded(child: Divider(color: c.border)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text('or enter PIN', style: TextStyle(fontSize: 11, color: c.textMuted)),
+            ),
+            Expanded(child: Divider(color: c.border)),
+          ],
+        ),
         const SizedBox(height: 6),
-        Text(ChallengeUtils.formatPin(_pin), style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: c.primary, letterSpacing: 8)),
+        Text(
+          ChallengeUtils.formatPin(_pin),
+          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: c.primary, letterSpacing: 8),
+        ),
         const SizedBox(height: 4),
-        Text('Difficulty: ${_cDiff[0].toUpperCase()}${_cDiff.substring(1)}', style: TextStyle(fontSize: 11, color: c.textMuted)),
+        Text(
+          'Difficulty: ${_cDiff[0].toUpperCase()}${_cDiff.substring(1)}',
+          style: TextStyle(fontSize: 11, color: c.textMuted),
+        ),
         const SizedBox(height: 14),
         Row(
           children: [
@@ -151,9 +182,16 @@ class _ChallengeModalState extends State<ChallengeModal> {
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 13),
-                  decoration: BoxDecoration(color: c.surface, border: Border.all(color: c.border, width: 1.5), borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(
+                    color: c.surface,
+                    border: Border.all(color: c.border, width: 1.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   alignment: Alignment.center,
-                  child: Text('📋 Copy', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: c.text)),
+                  child: Text(
+                    '📋 Copy',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: c.text),
+                  ),
                 ),
               ),
             ),
@@ -173,7 +211,11 @@ class _ChallengeModalState extends State<ChallengeModal> {
   Widget _buildJoin() {
     return Column(
       children: [
-        Text('Enter the 6-digit PIN your friend shared', style: TextStyle(fontSize: 13, color: c.textMuted), textAlign: TextAlign.center),
+        Text(
+          'Enter the 6-digit PIN your friend shared',
+          style: TextStyle(fontSize: 13, color: c.textMuted),
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 12),
         TextField(
           controller: _pinController,
@@ -187,9 +229,18 @@ class _ChallengeModalState extends State<ChallengeModal> {
             fillColor: c.surface2,
             hintText: '123456',
             hintStyle: TextStyle(fontSize: 18, color: c.textMuted, letterSpacing: 3),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.border, width: 2)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.border, width: 2)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.primary, width: 2)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: c.border, width: 2),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: c.border, width: 2),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: c.primary, width: 2),
+            ),
             contentPadding: const EdgeInsets.symmetric(vertical: 13),
           ),
           onSubmitted: (_) => _join(),
@@ -222,7 +273,14 @@ class _ChallengeModalState extends State<ChallengeModal> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 alignment: Alignment.center,
-                child: Text(d[0].toUpperCase() + d.substring(1), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: active ? Colors.white : c.textMuted)),
+                child: Text(
+                  d[0].toUpperCase() + d.substring(1),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: active ? Colors.white : c.textMuted,
+                  ),
+                ),
               ),
             ),
           ),
@@ -237,11 +295,16 @@ class _ChallengeModalState extends State<ChallengeModal> {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 13),
-        decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF4F6EF7), Color(0xFFA855F7)]), borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [Color(0xFF4F6EF7), Color(0xFFA855F7)]),
+          borderRadius: BorderRadius.circular(12),
+        ),
         alignment: Alignment.center,
-        child: Text(text, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
+        child: Text(
+          text,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white),
+        ),
       ),
     );
   }
 }
-

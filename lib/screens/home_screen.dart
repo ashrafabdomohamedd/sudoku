@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../state/game_store.dart';
 import '../state/game_state.dart';
@@ -22,6 +23,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   GameStore get store => widget.store;
   AppColorScheme get colors => store.isDark ? AppColors.dark : AppColors.light;
+
+  // Difficulty icons
+  static const _diffIcons = {
+    'easy': '🌱',
+    'medium': '🔥',
+    'hard': '💪',
+    'expert': '🏆',
+  };
+
+  // Difficulty descriptions
+  static const _diffDesc = {
+    'easy': '38+ clues',
+    'medium': '30-37 clues',
+    'hard': '25-29 clues',
+    'expert': '22-24 clues',
+  };
 
   void _navigateToGame({int? seed, String? pin, String? diff}) {
     final d = diff ?? _difficulty;
@@ -64,9 +81,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   _buildStats(c),
                   const SizedBox(height: 20),
                   _sectionLabel('Select Difficulty', c),
-                  const SizedBox(height: 9),
-                  _buildDifficultyBar(c),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
+                  _buildDifficultyCards(c),
+                  const SizedBox(height: 16),
                   _buildPlayButton(),
                   if (store.savedGame != null) ...[
                     const SizedBox(height: 10),
@@ -74,11 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                   const SizedBox(height: 10),
                   _buildChallengeButton(),
-                  const SizedBox(height: 20),
-                  _sectionLabel('Best Times', c),
-                  const SizedBox(height: 9),
-                  _buildBestTimes(c),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
                   _sectionLabel('Recent Scores', c),
                   const SizedBox(height: 9),
                   _buildScores(c),
@@ -138,7 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: BoxDecoration(
           gradient: const LinearGradient(colors: [Color(0xFF4F6EF7), Color(0xFF7C3AED)]),
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: const Color(0xFF4F6EF7).withOpacity(0.38), blurRadius: 32, offset: const Offset(0, 8))],
+          boxShadow: [BoxShadow(color: const Color(0xFF4F6EF7).withValues(alpha:0.38), blurRadius: 32, offset: const Offset(0, 8))],
         ),
         child: Row(
           children: [
@@ -148,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: color,
-                border: Border.all(color: Colors.white.withOpacity(0.3), width: 3),
+                border: Border.all(color: Colors.white.withValues(alpha:0.3), width: 3),
               ),
               alignment: Alignment.center,
               child: Text(
@@ -163,16 +176,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Text(store.name, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: Colors.white)),
                   const SizedBox(height: 3),
-                  Text('${store.rankIcon} ${store.rankName}', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.65))),
+                  Text('${store.rankIcon} ${store.rankName}', style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha:0.65))),
                   const SizedBox(height: 5),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.18),
+                      color: Colors.white.withValues(alpha:0.18),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text('${store.won} win${store.won != 1 ? 's' : ''}',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white.withOpacity(0.9))),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white.withValues(alpha:0.9))),
                   ),
                 ],
               ),
@@ -180,8 +193,8 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.18),
-                border: Border.all(color: Colors.white.withOpacity(0.28)),
+                color: Colors.white.withValues(alpha:0.18),
+                border: Border.all(color: Colors.white.withValues(alpha:0.28)),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text('Edit', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
@@ -212,7 +225,7 @@ class _HomeScreenState extends State<HomeScreen> {
           color: c.surface,
           border: Border.all(color: c.border),
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: c.primary.withOpacity(0.1), blurRadius: 24, offset: const Offset(0, 4))],
+          boxShadow: [BoxShadow(color: c.primary.withValues(alpha:0.1), blurRadius: 24, offset: const Offset(0, 4))],
         ),
         child: Column(
           children: [
@@ -229,33 +242,131 @@ class _HomeScreenState extends State<HomeScreen> {
     return Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.textMuted, letterSpacing: 1));
   }
 
-  Widget _buildDifficultyBar(AppColorScheme c) {
-    const diffs = ['easy', 'medium', 'hard', 'expert'];
-    return Row(
-      children: diffs.map((d) {
-        final active = d == _difficulty;
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: GestureDetector(
-              onTap: () => setState(() => _difficulty = d),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 9),
-                decoration: BoxDecoration(
-                  color: active ? c.primary : c.surface,
-                  border: Border.all(color: active ? c.primary : c.border, width: 1.5),
-                  borderRadius: BorderRadius.circular(10),
+  Widget _buildDifficultyCards(AppColorScheme c) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: _buildDifficultyCard('easy', c)),
+            const SizedBox(width: 10),
+            Expanded(child: _buildDifficultyCard('medium', c)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(child: _buildDifficultyCard('hard', c)),
+            const SizedBox(width: 10),
+            Expanded(child: _buildDifficultyCard('expert', c)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDifficultyCard(String diff, AppColorScheme c) {
+    final isSelected = diff == _difficulty;
+    final bestTime = store.bestTimes[diff];
+    final badge = _diffBadge(diff, c);
+    final icon = _diffIcons[diff] ?? '🎮';
+    final desc = _diffDesc[diff] ?? '';
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _difficulty = diff);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? badge.$2 : c.border,
+            width: isSelected ? 2.5 : 1.5,
+          ),
+          boxShadow: isSelected ? [
+            BoxShadow(
+              color: badge.$2.withValues(alpha: 0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ] : [
+            BoxShadow(
+              color: c.primary.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text(icon, style: const TextStyle(fontSize: 18)),
+                    const SizedBox(width: 8),
+                    Text(
+                      diff[0].toUpperCase() + diff.substring(1),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: isSelected ? badge.$2 : c.text,
+                      ),
+                    ),
+                  ],
                 ),
-                alignment: Alignment.center,
-                child: Text(
-                  d[0].toUpperCase() + d.substring(1),
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: active ? Colors.white : c.textMuted, letterSpacing: 0.5),
-                ),
+                if (isSelected)
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: badge.$2,
+                    ),
+                    child: const Icon(Icons.check, size: 14, color: Colors.white),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              desc,
+              style: TextStyle(fontSize: 11, color: c.textMuted),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: badge.$1.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.timer_outlined,
+                    size: 14,
+                    color: bestTime != null ? badge.$2 : c.textMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    bestTime != null ? _fmtTime(bestTime) : 'No record',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: bestTime != null ? badge.$2 : c.textMuted,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-        );
-      }).toList(),
+          ],
+        ),
+      ),
     );
   }
 
@@ -270,7 +381,7 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: BoxDecoration(
           gradient: const LinearGradient(colors: [Color(0xFF4F6EF7), Color(0xFFA855F7)]),
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: const Color(0xFF4F6EF7).withOpacity(0.4), blurRadius: 22, offset: const Offset(0, 6))],
+          boxShadow: [BoxShadow(color: const Color(0xFF4F6EF7).withValues(alpha:0.4), blurRadius: 22, offset: const Offset(0, 6))],
         ),
         alignment: Alignment.center,
         child: const Text('▶  New Game', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5)),
@@ -302,45 +413,11 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: BoxDecoration(
           gradient: const LinearGradient(colors: [Color(0xFFF72585), Color(0xFF7209B7)]),
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: const Color(0xFFF72585).withOpacity(0.35), blurRadius: 22, offset: const Offset(0, 6))],
+          boxShadow: [BoxShadow(color: const Color(0xFFF72585).withValues(alpha:0.35), blurRadius: 22, offset: const Offset(0, 6))],
         ),
         alignment: Alignment.center,
         child: const Text('⚔️  Challenge a Friend', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5)),
       ),
-    );
-  }
-
-  Widget _buildBestTimes(AppColorScheme c) {
-    const diffs = ['easy', 'medium', 'hard', 'expert'];
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: diffs.map((d) {
-        final t = store.bestTimes[d];
-        return SizedBox(
-          width: (MediaQuery.of(context).size.width - 48) / 2,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: c.surface,
-              border: Border.all(color: c.border),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: c.primary.withOpacity(0.1), blurRadius: 24, offset: const Offset(0, 4))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(d.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: c.textMuted, letterSpacing: 0.5)),
-                const SizedBox(height: 4),
-                Text(
-                  t != null ? _fmtTime(t) : 'No record',
-                  style: TextStyle(fontSize: t != null ? 17 : 13, fontWeight: FontWeight.w900, color: t != null ? c.primary : c.textMuted),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 
@@ -362,7 +439,7 @@ class _HomeScreenState extends State<HomeScreen> {
             color: c.surface,
             border: Border.all(color: c.border),
             borderRadius: BorderRadius.circular(12),
-            boxShadow: [BoxShadow(color: c.primary.withOpacity(0.1), blurRadius: 24, offset: const Offset(0, 4))],
+            boxShadow: [BoxShadow(color: c.primary.withValues(alpha:0.1), blurRadius: 24, offset: const Offset(0, 4))],
           ),
           child: Row(
             children: [

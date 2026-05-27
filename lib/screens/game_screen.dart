@@ -17,19 +17,48 @@ class GameScreen extends StatefulWidget {
   State<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends State<GameScreen> {
+class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Timer? _timer;
   bool _showConfetti = false;
+  final FocusNode _focusNode = FocusNode();
+
+  // Animation for selected cell
+  late AnimationController _selectionController;
+  late Animation<double> _selectionAnimation;
 
   GameState get game => widget.gameState;
   GameStore get store => widget.store;
   AppColorScheme get colors => store.isDark ? AppColors.dark : AppColors.light;
+
+  // Calculate progress percentage
+  int get _filledCells {
+    if (game.board.isEmpty) return 0;
+    int count = 0;
+    for (var row in game.board) {
+      for (var cell in row) {
+        if (cell != 0) count++;
+      }
+    }
+    return count;
+  }
+
+  double get _progress => _filledCells / 81;
 
   @override
   void initState() {
     super.initState();
     _startTimer();
     game.addListener(_onGameChange);
+    _focusNode.requestFocus();
+
+    // Setup selection animation
+    _selectionController = AnimationController(
+      duration: const Duration(milliseconds: 150),
+      vsync: this,
+    );
+    _selectionAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
+      CurvedAnimation(parent: _selectionController, curve: Curves.easeOut),
+    );
   }
 
   void _startTimer() {
@@ -50,6 +79,7 @@ class _GameScreenState extends State<GameScreen> {
     if (game.status == GameStatus.won) {
       _timer?.cancel();
       store.recordWin(game.difficulty, game.seconds, game.mistakes);
+      HapticFeedback.heavyImpact();
       setState(() => _showConfetti = true);
       Future.delayed(const Duration(milliseconds: 600), () {
         if (mounted) _showWinDialog();
@@ -57,6 +87,7 @@ class _GameScreenState extends State<GameScreen> {
     } else if (game.status == GameStatus.lost) {
       _timer?.cancel();
       store.recordLoss(game.difficulty, game.seconds, game.mistakes);
+      HapticFeedback.vibrate();
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) _showLoseDialog();
       });
@@ -67,8 +98,9 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _focusNode.dispose();
+    _selectionController.dispose();
     game.removeListener(_onGameChange);
-    // Save game if still playing
     if (!game.gameOver && game.puzzle.isNotEmpty && !game.isGenerating) {
       store.saveGame(game.toSavedGame());
     }
@@ -84,39 +116,131 @@ class _GameScreenState extends State<GameScreen> {
     if (mounted) _startTimer();
   }
 
+  // Handle keyboard input
+  void _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return;
+    if (game.paused || game.gameOver || game.isGenerating) return;
+
+    final key = event.logicalKey;
+
+    // Number keys 1-9
+    if (key.keyId >= LogicalKeyboardKey.digit1.keyId &&
+        key.keyId <= LogicalKeyboardKey.digit9.keyId) {
+      final num = key.keyId - LogicalKeyboardKey.digit0.keyId;
+      if (game.countForNumber(num) < 9) {
+        HapticFeedback.lightImpact();
+        game.inputNumber(num);
+      }
+      return;
+    }
+
+    // Numpad 1-9
+    if (key.keyId >= LogicalKeyboardKey.numpad1.keyId &&
+        key.keyId <= LogicalKeyboardKey.numpad9.keyId) {
+      final num = key.keyId - LogicalKeyboardKey.numpad0.keyId;
+      if (game.countForNumber(num) < 9) {
+        HapticFeedback.lightImpact();
+        game.inputNumber(num);
+      }
+      return;
+    }
+
+    // Arrow keys for navigation
+    if (key == LogicalKeyboardKey.arrowUp) {
+      _moveSelection(-1, 0);
+    } else if (key == LogicalKeyboardKey.arrowDown) {
+      _moveSelection(1, 0);
+    } else if (key == LogicalKeyboardKey.arrowLeft) {
+      _moveSelection(0, -1);
+    } else if (key == LogicalKeyboardKey.arrowRight) {
+      _moveSelection(0, 1);
+    }
+
+    // Backspace/Delete to erase
+    if (key == LogicalKeyboardKey.backspace || key == LogicalKeyboardKey.delete) {
+      HapticFeedback.lightImpact();
+      game.eraseCell();
+    }
+
+    // N for notes toggle
+    if (key == LogicalKeyboardKey.keyN) {
+      HapticFeedback.selectionClick();
+      game.toggleNotes();
+    }
+
+    // Z for undo
+    if (key == LogicalKeyboardKey.keyZ) {
+      HapticFeedback.lightImpact();
+      game.undo();
+    }
+
+    // H for hint
+    if (key == LogicalKeyboardKey.keyH) {
+      HapticFeedback.mediumImpact();
+      game.giveHint();
+    }
+
+    // Space to pause
+    if (key == LogicalKeyboardKey.space) {
+      game.togglePause();
+    }
+  }
+
+  void _moveSelection(int dr, int dc) {
+    int r = game.selectedRow ?? 4;
+    int c = game.selectedCol ?? 4;
+    r = (r + dr).clamp(0, 8);
+    c = (c + dc).clamp(0, 8);
+    HapticFeedback.selectionClick();
+    game.selectCell(r, c);
+    _selectionController.forward(from: 0);
+  }
+
+  void _onCellTap(int r, int c) {
+    HapticFeedback.selectionClick();
+    game.selectCell(r, c);
+    _selectionController.forward(from: 0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = colors;
-    return Scaffold(
-      backgroundColor: c.bg,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 460),
-                  child: Column(
-                    children: [
-                      _buildHeader(c),
-                      const SizedBox(height: 16),
-                      _buildStatsBar(c),
-                      const SizedBox(height: 14),
-                      _buildBoard(c),
-                      const SizedBox(height: 14),
-                      _buildNumpad(c),
-                      const SizedBox(height: 10),
-                      _buildActionBar(c),
-                      const SizedBox(height: 12),
-                      _buildNewGameButton(),
-                    ],
+    return KeyboardListener(
+      focusNode: _focusNode,
+      onKeyEvent: _handleKeyEvent,
+      child: Scaffold(
+        backgroundColor: c.bg,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 460),
+                    child: Column(
+                      children: [
+                        _buildHeader(c),
+                        const SizedBox(height: 16),
+                        _buildStatsBar(c),
+                        const SizedBox(height: 8),
+                        _buildProgressBar(c),
+                        const SizedBox(height: 14),
+                        _buildBoard(c),
+                        const SizedBox(height: 14),
+                        _buildNumpad(c),
+                        const SizedBox(height: 10),
+                        _buildActionBar(c),
+                        const SizedBox(height: 12),
+                        _buildNewGameButton(),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            if (_showConfetti) const ConfettiOverlay(),
-          ],
+              if (_showConfetti) const ConfettiOverlay(),
+            ],
+          ),
         ),
       ),
     );
@@ -127,15 +251,18 @@ class _GameScreenState extends State<GameScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         GestureDetector(
-          onTap: () => Navigator.of(context).pop(),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            Navigator.of(context).pop();
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(9)),
             child: Row(
               children: [
                 Icon(Icons.arrow_back, color: c.textMuted),
-                const SizedBox(width: 4),
-                Text('Home', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: c.textMuted)),
+                // const SizedBox(width: 4),
+                // Text('Home', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: c.textMuted)),
               ],
             ),
           ),
@@ -153,11 +280,14 @@ class _GameScreenState extends State<GameScreen> {
                   gradient: const LinearGradient(colors: [Color(0xFFF72585), Color(0xFF7209B7)]),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text('⚔️ Challenge', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)),
+                child: const Text('Challenge', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)),
               ),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: widget.onToggleTheme,
+              onTap: () {
+                HapticFeedback.lightImpact();
+                widget.onToggleTheme();
+              },
               child: Container(
                 width: 38, height: 38,
                 decoration: BoxDecoration(shape: BoxShape.circle, color: c.surface, border: Border.all(color: c.border)),
@@ -172,31 +302,47 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Widget _buildStatsBar(AppColorScheme c) {
+    final diffColors = _getDifficultyColors(game.difficulty);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       decoration: BoxDecoration(
         color: c.surface,
         border: Border.all(color: c.border),
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: c.primary.withOpacity(0.1), blurRadius: 24, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: c.primary.withValues(alpha: 0.1), blurRadius: 24, offset: const Offset(0, 4))],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // Difficulty badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: diffColors.$1,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              game.difficulty[0].toUpperCase() + game.difficulty.substring(1),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: diffColors.$2),
+            ),
+          ),
           // Mistakes
           Row(
             children: [
               ...List.generate(3, (i) => Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Container(
+                padding: const EdgeInsets.only(right: 5),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
                   width: 9, height: 9,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: i < game.mistakes ? c.errColor : c.border,
+                    boxShadow: i < game.mistakes ? [
+                      BoxShadow(color: c.errColor.withValues(alpha: 0.5), blurRadius: 4),
+                    ] : null,
                   ),
                 ),
               )),
-              Text('Mistakes', style: TextStyle(fontSize: 12, color: c.textMuted, fontWeight: FontWeight.w500)),
             ],
           ),
           // Timer
@@ -205,13 +351,40 @@ class _GameScreenState extends State<GameScreen> {
               Text(_fmtTime(game.seconds), style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: c.text, fontFeatures: const [FontFeature.tabularFigures()])),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: () => game.togglePause(),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  game.togglePause();
+                },
                 child: Text(game.paused ? '▶' : '⏸', style: const TextStyle(fontSize: 15)),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildProgressBar(AppColorScheme c) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Progress', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: c.textMuted)),
+            Text('${(_progress * 100).toInt()}%', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: c.primary)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: _progress,
+            minHeight: 6,
+            backgroundColor: c.surface2,
+            valueColor: AlwaysStoppedAnimation<Color>(c.primary),
+          ),
+        ),
+      ],
     );
   }
 
@@ -222,7 +395,7 @@ class _GameScreenState extends State<GameScreen> {
         color: c.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: c.border),
-        boxShadow: [BoxShadow(color: c.primary.withOpacity(0.1), blurRadius: 24, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: c.primary.withValues(alpha: 0.1), blurRadius: 24, offset: const Offset(0, 4))],
       ),
       child: Stack(
         children: [
@@ -244,7 +417,10 @@ class _GameScreenState extends State<GameScreen> {
           if (game.paused)
             Positioned.fill(
               child: GestureDetector(
-                onTap: () => game.togglePause(),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  game.togglePause();
+                },
                 child: Container(
                   decoration: BoxDecoration(
                     color: c.surface,
@@ -257,6 +433,8 @@ class _GameScreenState extends State<GameScreen> {
                       const Text('⏸', style: TextStyle(fontSize: 36)),
                       const SizedBox(height: 8),
                       Text('Tap to resume', style: TextStyle(fontSize: 13, color: c.textMuted)),
+                      const SizedBox(height: 4),
+                      Text('or press Space', style: TextStyle(fontSize: 11, color: c.textMuted.withValues(alpha: 0.6))),
                     ],
                   ),
                 ),
@@ -279,16 +457,25 @@ class _GameScreenState extends State<GameScreen> {
     final isHint = game.hintCells.contains('$r,$c');
 
     Color bgColor = Colors.transparent;
-    if (isSel) bgColor = col.selBg;
-    else if (sameNum) bgColor = col.sameBg;
-    else if (inGroup) bgColor = col.hlBg;
+    if (isSel) {
+      bgColor = col.selBg;
+    } else if (sameNum) {
+      bgColor = col.sameBg;
+    } else if (inGroup) {
+      bgColor = col.hlBg;
+    }
     if (isErr) bgColor = col.errBg;
 
     Color textColor = col.text;
-    if (isErr) textColor = col.errColor;
-    else if (given) textColor = col.givenColor;
-    else if (isHint) textColor = col.hintColor;
-    else if (val != 0) textColor = col.userColor;
+    if (isErr) {
+      textColor = col.errColor;
+    } else if (given) {
+      textColor = col.givenColor;
+    } else if (isHint) {
+      textColor = col.hintColor;
+    } else if (val != 0) {
+      textColor = col.userColor;
+    }
 
     // Borders
     final rightBorder = (c == 2 || c == 5 || c == 8) ? BorderSide(color: col.borderBox, width: 2.5) : BorderSide(color: col.border, width: 0.5);
@@ -296,20 +483,34 @@ class _GameScreenState extends State<GameScreen> {
     final leftBorder = c == 0 ? BorderSide(color: col.borderBox, width: 2.5) : BorderSide.none;
     final topBorder = r == 0 ? BorderSide(color: col.borderBox, width: 2.5) : BorderSide.none;
 
-    return GestureDetector(
-      onTap: () => game.selectCell(r, c),
-      child: Container(
-        decoration: BoxDecoration(
-          color: bgColor,
-          border: Border(right: rightBorder, bottom: bottomBorder, left: leftBorder, top: topBorder),
-        ),
-        alignment: Alignment.center,
-        child: val != 0
-            ? Text('$val', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: textColor))
-            : game.notes[r][c].isNotEmpty
-                ? _buildNotes(r, c, col)
-                : null,
+    Widget cellContent = Container(
+      decoration: BoxDecoration(
+        color: bgColor,
+        border: Border(right: rightBorder, bottom: bottomBorder, left: leftBorder, top: topBorder),
       ),
+      alignment: Alignment.center,
+      child: val != 0
+          ? Text('$val', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: textColor))
+          : game.notes[r][c].isNotEmpty
+              ? _buildNotes(r, c, col)
+              : null,
+    );
+
+    // Add scale animation for selected cell
+    if (isSel) {
+      cellContent = AnimatedBuilder(
+        animation: _selectionAnimation,
+        builder: (context, child) => Transform.scale(
+          scale: _selectionAnimation.value,
+          child: child,
+        ),
+        child: cellContent,
+      );
+    }
+
+    return GestureDetector(
+      onTap: () => _onCellTap(r, c),
+      child: cellContent,
     );
   }
 
@@ -336,31 +537,54 @@ class _GameScreenState extends State<GameScreen> {
         final n = i + 1;
         final count = game.countForNumber(n);
         final depleted = count >= 9;
+        final isComplete = depleted;
+
         return Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2.5),
             child: GestureDetector(
-              onTap: depleted ? null : () => game.inputNumber(n),
+              onTap: depleted ? null : () {
+                HapticFeedback.lightImpact();
+                game.inputNumber(n);
+              },
               child: AspectRatio(
                 aspectRatio: 0.9,
-                child: Container(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
                   decoration: BoxDecoration(
                     color: c.surface,
-                    border: Border.all(color: c.border, width: 1.5),
+                    border: Border.all(
+                      color: isComplete ? c.hintColor.withValues(alpha: 0.5) : c.border,
+                      width: isComplete ? 2 : 1.5,
+                    ),
                     borderRadius: BorderRadius.circular(10),
+                    boxShadow: isComplete ? [
+                      BoxShadow(color: c.hintColor.withValues(alpha: 0.3), blurRadius: 8),
+                    ] : null,
                   ),
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      Opacity(
+                      AnimatedOpacity(
+                        duration: const Duration(milliseconds: 300),
                         opacity: depleted ? 0.25 : 1,
-                        child: Text('$n', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c.text)),
+                        child: Text('$n', style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: isComplete ? c.hintColor : c.text,
+                        )),
                       ),
                       if (!depleted)
                         Positioned(
                           top: 2,
                           right: 3,
                           child: Text('${9 - count}', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w600, color: c.textMuted)),
+                        ),
+                      if (isComplete)
+                        Positioned(
+                          top: 2,
+                          right: 3,
+                          child: Icon(Icons.check, size: 10, color: c.hintColor),
                         ),
                     ],
                   ),
@@ -376,22 +600,35 @@ class _GameScreenState extends State<GameScreen> {
   Widget _buildActionBar(AppColorScheme c) {
     return Row(
       children: [
-        _actionBtn('↩', 'Undo', false, () => game.undo(), c),
+        _actionBtn('↩', 'Undo', 'Z', false, () {
+          HapticFeedback.lightImpact();
+          game.undo();
+        }, c),
         const SizedBox(width: 8),
-        _actionBtn('⌫', 'Erase', false, () => game.eraseCell(), c),
+        _actionBtn('⌫', 'Erase', '⌫', false, () {
+          HapticFeedback.lightImpact();
+          game.eraseCell();
+        }, c),
         const SizedBox(width: 8),
-        _actionBtn('✏️', 'Notes', game.notesMode, () => game.toggleNotes(), c),
+        _actionBtn('✏️', 'Notes', 'N', game.notesMode, () {
+          HapticFeedback.selectionClick();
+          game.toggleNotes();
+        }, c),
         const SizedBox(width: 8),
-        _actionBtn('💡', 'Hint', false, () => game.giveHint(), c),
+        _actionBtn('💡', 'Hint', 'H', false, () {
+          HapticFeedback.mediumImpact();
+          game.giveHint();
+        }, c),
       ],
     );
   }
 
-  Widget _actionBtn(String icon, String label, bool active, VoidCallback onTap, AppColorScheme c) {
+  Widget _actionBtn(String icon, String label, String shortcut, bool active, VoidCallback onTap, AppColorScheme c) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: active ? c.primary : c.surface,
@@ -412,19 +649,38 @@ class _GameScreenState extends State<GameScreen> {
 
   Widget _buildNewGameButton() {
     return GestureDetector(
-      onTap: _newGame,
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        _newGame();
+      },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 15),
         decoration: BoxDecoration(
           gradient: const LinearGradient(colors: [Color(0xFF4F6EF7), Color(0xFFA855F7)]),
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: const Color(0xFF4F6EF7).withOpacity(0.35), blurRadius: 18, offset: const Offset(0, 4))],
+          boxShadow: [BoxShadow(color: const Color(0xFF4F6EF7).withValues(alpha: 0.35), blurRadius: 18, offset: const Offset(0, 4))],
         ),
         alignment: Alignment.center,
         child: const Text('New Game', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5)),
       ),
     );
+  }
+
+  (Color, Color) _getDifficultyColors(String diff) {
+    final isDark = store.isDark;
+    switch (diff) {
+      case 'easy':
+        return isDark ? (DiffBadgeColors.easyDark.bg, DiffBadgeColors.easyDark.text) : (DiffBadgeColors.easy.bg, DiffBadgeColors.easy.text);
+      case 'medium':
+        return isDark ? (DiffBadgeColors.mediumDark.bg, DiffBadgeColors.mediumDark.text) : (DiffBadgeColors.medium.bg, DiffBadgeColors.medium.text);
+      case 'hard':
+        return isDark ? (DiffBadgeColors.hardDark.bg, DiffBadgeColors.hardDark.text) : (DiffBadgeColors.hard.bg, DiffBadgeColors.hard.text);
+      case 'expert':
+        return isDark ? (DiffBadgeColors.expertDark.bg, DiffBadgeColors.expertDark.text) : (DiffBadgeColors.expert.bg, DiffBadgeColors.expert.text);
+      default:
+        return (colors.surface2, colors.textMuted);
+    }
   }
 
   void _showWinDialog() {
@@ -651,7 +907,10 @@ class _ChallengeWinDialog extends StatelessWidget {
 // ── Shared Buttons ──
 Widget _gradientBtn(String text, VoidCallback onTap) {
   return GestureDetector(
-    onTap: onTap,
+    onTap: () {
+      HapticFeedback.lightImpact();
+      onTap();
+    },
     child: Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 13),
@@ -667,7 +926,10 @@ Widget _gradientBtn(String text, VoidCallback onTap) {
 
 Widget _outlineBtn(String text, VoidCallback onTap, AppColorScheme c) {
   return GestureDetector(
-    onTap: onTap,
+    onTap: () {
+      HapticFeedback.lightImpact();
+      onTap();
+    },
     child: Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 13),
@@ -681,5 +943,3 @@ Widget _outlineBtn(String text, VoidCallback onTap, AppColorScheme c) {
     ),
   );
 }
-
-

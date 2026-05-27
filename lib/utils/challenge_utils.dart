@@ -22,7 +22,8 @@ class ChallengeUtils {
   /// Format PIN for display: "2  34 567" style
   static String formatPin(String pin) {
     if (pin.length < 6) return pin;
-    return '${pin[0]}  ${pin.substring(1, 3)} ${pin.substring(3)}';
+    // return pin;
+    return '${pin.substring(0, 3)} ${pin.substring(3)}';
   }
 }
 
