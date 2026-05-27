@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../engine/sudoku_engine.dart';
 import '../state/game_store.dart';
 
@@ -52,22 +52,23 @@ class GameState extends ChangeNotifier {
   static const maxMistakes = 3;
 
   bool get hasSelection => selectedRow != null && selectedCol != null;
-  int get selectedValue => hasSelection ? board[selectedRow!][selectedCol!] : 0;
+  int get selectedValue => hasSelection && board.isNotEmpty ? board[selectedRow!][selectedCol!] : 0;
 
-  void newGame(String diff, {int? seed, String? pin}) {
+  bool get isGenerating => _generating;
+  bool _generating = false;
+
+  Future<void> newGame(String diff, {int? seed, String? pin}) async {
     difficulty = diff;
     challengeMode = seed != null;
     challengeSeed = seed;
     challengePin = pin;
 
-    final engine = SudokuEngine(seed: seed);
-    engine.generate(diff);
-
-    puzzle = engine.puzzle;
-    solution = engine.solution;
-    board = puzzle.map((r) => List<int>.from(r)).toList();
-    isGiven = puzzle.map((r) => r.map((v) => v != 0).toList()).toList();
-    notes = List.generate(9, (_) => List.generate(9, (_) => <int>{}));
+    // Reset state immediately
+    puzzle = [];
+    solution = [];
+    board = [];
+    isGiven = [];
+    notes = [];
     hintCells = {};
     undoStack = [];
     selectedRow = null;
@@ -78,6 +79,18 @@ class GameState extends ChangeNotifier {
     notesMode = false;
     gameOver = false;
     status = GameStatus.playing;
+    _generating = true;
+    notifyListeners();
+
+    // Generate in isolate
+    final result = await compute(_generatePuzzle, {'diff': diff, 'seed': seed});
+
+    puzzle = result['puzzle']!;
+    solution = result['solution']!;
+    board = puzzle.map((r) => List<int>.from(r)).toList();
+    isGiven = puzzle.map((r) => r.map((v) => v != 0).toList()).toList();
+    notes = List.generate(9, (_) => List.generate(9, (_) => <int>{}));
+    _generating = false;
     notifyListeners();
   }
 
@@ -115,14 +128,14 @@ class GameState extends ChangeNotifier {
   );
 
   void selectCell(int r, int c) {
-    if (paused || gameOver) return;
+    if (paused || gameOver || _generating) return;
     selectedRow = r;
     selectedCol = c;
     notifyListeners();
   }
 
   void inputNumber(int n) {
-    if (!hasSelection || gameOver || paused) return;
+    if (!hasSelection || gameOver || paused || _generating) return;
     final r = selectedRow!, c = selectedCol!;
     if (isGiven[r][c]) return;
 
@@ -162,7 +175,7 @@ class GameState extends ChangeNotifier {
   }
 
   void eraseCell() {
-    if (!hasSelection || gameOver || paused) return;
+    if (!hasSelection || gameOver || paused || _generating) return;
     final r = selectedRow!, c = selectedCol!;
     if (isGiven[r][c]) return;
 
@@ -199,7 +212,7 @@ class GameState extends ChangeNotifier {
   }
 
   void giveHint() {
-    if (gameOver || paused) return;
+    if (gameOver || paused || _generating) return;
     final empty = <Point<int>>[];
     for (int r = 0; r < 9; r++) {
       for (int c = 0; c < 9; c++) {
@@ -226,13 +239,14 @@ class GameState extends ChangeNotifier {
   }
 
   void tick() {
-    if (!paused && !gameOver) {
+    if (!paused && !gameOver && !_generating) {
       seconds++;
       notifyListeners();
     }
   }
 
   void _checkWin() {
+    if (board.isEmpty || solution.isEmpty) return;
     for (int r = 0; r < 9; r++) {
       for (int c = 0; c < 9; c++) {
         if (board[r][c] != solution[r][c]) return;
@@ -243,6 +257,7 @@ class GameState extends ChangeNotifier {
   }
 
   int countForNumber(int n) {
+    if (board.isEmpty) return 0;
     int count = 0;
     for (int r = 0; r < 9; r++) {
       for (int c = 0; c < 9; c++) {
@@ -253,3 +268,11 @@ class GameState extends ChangeNotifier {
   }
 }
 
+// Top-level function for compute isolate
+Map<String, List<List<int>>> _generatePuzzle(Map<String, dynamic> params) {
+  final diff = params['diff'] as String;
+  final seed = params['seed'] as int?;
+  final engine = SudokuEngine(seed: seed);
+  engine.generate(diff);
+  return {'puzzle': engine.puzzle, 'solution': engine.solution};
+}

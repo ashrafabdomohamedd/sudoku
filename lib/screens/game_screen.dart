@@ -43,6 +43,10 @@ class _GameScreenState extends State<GameScreen> {
 
   void _onGameChange() {
     if (!mounted) return;
+    if (game.isGenerating) {
+      setState(() {});
+      return;
+    }
     if (game.status == GameStatus.won) {
       _timer?.cancel();
       store.recordWin(game.difficulty, game.seconds, game.mistakes);
@@ -65,18 +69,19 @@ class _GameScreenState extends State<GameScreen> {
     _timer?.cancel();
     game.removeListener(_onGameChange);
     // Save game if still playing
-    if (!game.gameOver && game.puzzle.isNotEmpty) {
+    if (!game.gameOver && game.puzzle.isNotEmpty && !game.isGenerating) {
       store.saveGame(game.toSavedGame());
     }
     super.dispose();
   }
 
-  void _newGame() {
+  void _newGame() async {
     final seed = game.challengeMode ? game.challengeSeed : null;
     final pin = game.challengeMode ? game.challengePin : null;
-    game.newGame(game.difficulty, seed: seed, pin: pin);
-    _startTimer();
     setState(() => _showConfetti = false);
+    _timer?.cancel();
+    await game.newGame(game.difficulty, seed: seed, pin: pin);
+    if (mounted) _startTimer();
   }
 
   @override
@@ -97,8 +102,6 @@ class _GameScreenState extends State<GameScreen> {
                       _buildHeader(c),
                       const SizedBox(height: 16),
                       _buildStatsBar(c),
-                      const SizedBox(height: 14),
-                      _buildDiffBar(c),
                       const SizedBox(height: 14),
                       _buildBoard(c),
                       const SizedBox(height: 14),
@@ -128,7 +131,13 @@ class _GameScreenState extends State<GameScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(9)),
-            child: Text('← Home', style: TextStyle(fontSize: 14, color: c.textMuted)),
+            child: Row(
+              children: [
+                Icon(Icons.arrow_back, color: c.textMuted),
+                const SizedBox(width: 4),
+                Text('Home', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: c.textMuted)),
+              ],
+            ),
           ),
         ),
         ShaderMask(
@@ -206,37 +215,6 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildDiffBar(AppColorScheme c) {
-    const diffs = ['easy', 'medium', 'hard', 'expert'];
-    return Row(
-      children: diffs.map((d) {
-        final active = d == game.difficulty;
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: GestureDetector(
-              onTap: () {
-                game.difficulty = d;
-                _newGame();
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: active ? c.primary : c.surface,
-                  border: Border.all(color: active ? c.primary : c.border, width: 1.5),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                alignment: Alignment.center,
-                child: Text(d[0].toUpperCase() + d.substring(1),
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: active ? Colors.white : c.textMuted, letterSpacing: 0.6)),
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
   Widget _buildBoard(AppColorScheme c) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -250,7 +228,7 @@ class _GameScreenState extends State<GameScreen> {
         children: [
           AspectRatio(
             aspectRatio: 1,
-            child: game.puzzle.isEmpty
+            child: (game.puzzle.isEmpty || game.isGenerating)
                 ? const Center(child: CircularProgressIndicator())
                 : GridView.builder(
                     physics: const NeverScrollableScrollPhysics(),
@@ -313,8 +291,8 @@ class _GameScreenState extends State<GameScreen> {
     else if (val != 0) textColor = col.userColor;
 
     // Borders
-    final rightBorder = (c == 2 || c == 5) ? BorderSide(color: col.borderBox, width: 2.5) : BorderSide(color: col.border, width: 0.5);
-    final bottomBorder = (r == 2 || r == 5) ? BorderSide(color: col.borderBox, width: 2.5) : BorderSide(color: col.border, width: 0.5);
+    final rightBorder = (c == 2 || c == 5 || c == 8) ? BorderSide(color: col.borderBox, width: 2.5) : BorderSide(color: col.border, width: 0.5);
+    final bottomBorder = (r == 2 || r == 5 || r == 8) ? BorderSide(color: col.borderBox, width: 2.5) : BorderSide(color: col.border, width: 0.5);
     final leftBorder = c == 0 ? BorderSide(color: col.borderBox, width: 2.5) : BorderSide.none;
     final topBorder = r == 0 ? BorderSide(color: col.borderBox, width: 2.5) : BorderSide.none;
 
@@ -422,7 +400,7 @@ class _GameScreenState extends State<GameScreen> {
           ),
           child: Column(
             children: [
-              Text(icon, style: TextStyle(fontSize: 17, color: active ? Colors.white : null)),
+              Text(icon, style: TextStyle(fontSize: 17, color: active ? Colors.white : c.textMuted)),
               const SizedBox(height: 4),
               Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? Colors.white : c.textMuted)),
             ],
