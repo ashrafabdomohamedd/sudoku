@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
@@ -6,6 +7,8 @@ import '../state/game_state.dart';
 import '../screens/game_screen.dart';
 import '../widgets/challenge_modal.dart';
 import '../widgets/profile_edit_modal.dart';
+import '../widgets/achievements_modal.dart';
+import '../utils/daily_challenge.dart';
 
 class HomeScreen extends StatefulWidget {
   final GameStore store;
@@ -20,6 +23,32 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String _difficulty = 'easy';
+  Timer? _countdownTimer;
+  Duration _timeUntilNextDaily = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateCountdown();
+    // Update countdown every second if daily is completed
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (store.hasCompletedDailyToday) {
+        _updateCountdown();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _updateCountdown() {
+    setState(() {
+      _timeUntilNextDaily = DailyChallenge.timeUntilNextDaily();
+    });
+  }
 
   GameStore get store => widget.store;
   AppColorScheme get colors => store.isDark ? AppColors.dark : AppColors.light;
@@ -40,9 +69,9 @@ class _HomeScreenState extends State<HomeScreen> {
     'expert': '22-24 clues',
   };
 
-  void _navigateToGame({int? seed, String? pin, String? diff, bool isOnline = false}) {
+  void _navigateToGame({int? seed, String? pin, String? diff, bool isOnline = false, bool isDaily = false}) {
     final d = diff ?? _difficulty;
-    widget.gameState.newGame(d, seed: seed, pin: pin, online: isOnline);
+    widget.gameState.newGame(d, seed: seed, pin: pin, online: isOnline, isDaily: isDaily);
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => GameScreen(
@@ -50,9 +79,20 @@ class _HomeScreenState extends State<HomeScreen> {
           gameState: widget.gameState,
           onToggleTheme: widget.onToggleTheme,
           isOnlineChallenge: isOnline,
+          isDailyChallenge: isDaily,
         ),
       ),
     ).then((_) => setState(() {}));
+  }
+
+  void _startDailyChallenge() {
+    if (store.hasCompletedDailyToday) return;
+    store.clearSavedGame();
+    _navigateToGame(
+      diff: DailyChallenge.todayDifficulty,
+      seed: DailyChallenge.todaySeed,
+      isDaily: true,
+    );
   }
 
   void _continueGame() {
@@ -84,6 +124,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   _buildProfileCard(c),
                   const SizedBox(height: 16),
                   _buildStats(c),
+                  const SizedBox(height: 20),
+                  _buildDailyChallengeCard(c),
                   const SizedBox(height: 20),
                   _sectionLabel('Select Difficulty', c),
                   const SizedBox(height: 12),
@@ -123,6 +165,8 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             _iconButton(store.isDark ? '☀️' : '🌙', widget.onToggleTheme, c),
             const SizedBox(width: 8),
+            _achievementsButton(c),
+            const SizedBox(width: 8),
             _iconButton('⚙️', () => _showProfileEdit(), c),
           ],
         ),
@@ -143,6 +187,50 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         alignment: Alignment.center,
         child: Text(icon, style: const TextStyle(fontSize: 16)),
+      ),
+    );
+  }
+
+  Widget _achievementsButton(AppColorScheme c) {
+    final progress = store.achievementProgress;
+
+    return GestureDetector(
+      onTap: _showAchievements,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: c.surface,
+          border: Border.all(color: c.border),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            const Text('🏆', style: TextStyle(fontSize: 16)),
+            // Progress ring
+            if (progress > 0 && progress < 1)
+              Positioned.fill(
+                child: CircularProgressIndicator(
+                  value: progress,
+                  strokeWidth: 2,
+                  backgroundColor: Colors.transparent,
+                  valueColor: AlwaysStoppedAnimation<Color>(c.primary.withValues(alpha: 0.6)),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAchievements() {
+    HapticFeedback.lightImpact();
+    showDialog(
+      context: context,
+      builder: (_) => AchievementsModal(
+        store: store,
+        colors: colors,
       ),
     );
   }
@@ -237,6 +325,196 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: c.primary)),
             const SizedBox(height: 3),
             Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: c.textMuted)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDailyChallengeCard(AppColorScheme c) {
+    final completed = store.hasCompletedDailyToday;
+    final todayTime = store.todayDailyTime;
+    final difficulty = DailyChallenge.todayDifficulty;
+    final streak = store.currentStreak;
+    final longestStreak = store.longestStreak;
+
+    return GestureDetector(
+      onTap: completed ? null : _startDailyChallenge,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: completed
+              ? LinearGradient(colors: [Colors.grey.shade600, Colors.grey.shade700])
+              : const LinearGradient(colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)]),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: (completed ? Colors.grey : const Color(0xFFFF6B6B)).withValues(alpha: 0.35),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Text('📅', style: TextStyle(fontSize: 24)),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Daily Challenge',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          '${DailyChallenge.difficultyDisplayName(difficulty)} difficulty',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                if (completed)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.check_circle, color: Colors.white, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          _fmtTime(todayTime ?? 0),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'Play',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFFF6B6B),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        DailyChallenge.streakEmoji(streak),
+                        style: const TextStyle(fontSize: 20),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$streak day${streak != 1 ? 's' : ''} streak',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Text(
+                            DailyChallenge.streakMessage(streak),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Best: $longestStreak days',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                      ),
+                      if (completed)
+                        Text(
+                          'Next in ${DailyChallenge.formatDuration(_timeUntilNextDaily)}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (!store.canMaintainStreak && !completed) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade900.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade300.withValues(alpha: 0.5)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.yellow.shade200, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Play today to start a new streak!',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.yellow.shade200,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),

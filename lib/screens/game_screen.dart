@@ -6,14 +6,18 @@ import '../state/game_store.dart';
 import '../state/game_state.dart';
 import '../widgets/confetti_overlay.dart';
 import '../widgets/opponent_progress.dart';
+import '../widgets/achievements_modal.dart';
 import '../services/online_challenge_service.dart';
 import '../models/online_room.dart';
+import '../models/achievement.dart';
+import '../utils/daily_challenge.dart';
 
 class GameScreen extends StatefulWidget {
   final GameStore store;
   final GameState gameState;
   final VoidCallback onToggleTheme;
   final bool isOnlineChallenge;
+  final bool isDailyChallenge;
 
   const GameScreen({
     super.key,
@@ -21,6 +25,7 @@ class GameScreen extends StatefulWidget {
     required this.gameState,
     required this.onToggleTheme,
     this.isOnlineChallenge = false,
+    this.isDailyChallenge = false,
   });
 
   @override
@@ -45,10 +50,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   bool _opponentDisconnectedNotified = false;
   String? _lastOpponentStatus;
 
+  // Achievement notification state
+  final List<Achievement> _pendingAchievements = [];
+  Achievement? _showingAchievement;
+  Timer? _achievementDismissTimer;
+
   GameState get game => widget.gameState;
   GameStore get store => widget.store;
   AppColorScheme get colors => store.isDark ? AppColors.dark : AppColors.light;
   bool get isOnline => widget.isOnlineChallenge;
+  bool get isDaily => widget.isDailyChallenge;
 
   // Calculate progress percentage
   int get _filledCells {
@@ -84,6 +95,57 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     if (isOnline) {
       _setupOnlineChallenge();
     }
+
+    // Setup daily challenge callbacks
+    if (isDaily) {
+      _setupDailyChallenge();
+    }
+
+    // Setup achievement callback
+    store.onAchievementUnlocked = _onAchievementUnlocked;
+  }
+
+  void _onAchievementUnlocked(Achievement achievement) {
+    _pendingAchievements.add(achievement);
+    _showNextAchievement();
+  }
+
+  void _showNextAchievement() {
+    if (_showingAchievement != null || _pendingAchievements.isEmpty) return;
+    if (!mounted) return;
+
+    setState(() {
+      _showingAchievement = _pendingAchievements.removeAt(0);
+    });
+
+    HapticFeedback.mediumImpact();
+
+    // Auto-dismiss after 4 seconds
+    _achievementDismissTimer?.cancel();
+    _achievementDismissTimer = Timer(const Duration(seconds: 4), () {
+      _dismissAchievement();
+    });
+  }
+
+  void _dismissAchievement() {
+    if (!mounted) return;
+    _achievementDismissTimer?.cancel();
+    setState(() {
+      _showingAchievement = null;
+    });
+    // Show next achievement if any
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) _showNextAchievement();
+    });
+  }
+
+  void _setupDailyChallenge() {
+    game.onDailyWon = (totalSeconds, mistakes) {
+      store.recordDailyWin(totalSeconds, mistakes);
+    };
+    game.onDailyLost = (totalSeconds, mistakes) {
+      store.recordDailyLoss(totalSeconds, mistakes);
+    };
   }
 
   void _setupOnlineChallenge() async {
@@ -293,7 +355,36 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     }
     if (game.status == GameStatus.won) {
       _timer?.cancel();
-      store.recordWin(game.difficulty, game.seconds, game.mistakes);
+      // Daily challenges record their own stats via callbacks
+      if (!isDaily) {
+        store.recordWin(game.difficulty, game.seconds, game.mistakes);
+      }
+
+      // Check achievements
+      // Determine if this is an online win (I won, not runner-up)
+      bool isOnlineWinner = false;
+      if (isOnline) {
+        final opponentFinishTime = _opponent?.finishTime;
+        if (_opponent == null || _opponent!.status == 'playing' || _opponent!.status == 'disconnected') {
+          isOnlineWinner = true;
+        } else if (opponentFinishTime == null) {
+          isOnlineWinner = true;
+        } else if (game.seconds <= opponentFinishTime) {
+          isOnlineWinner = true;
+        }
+      }
+
+      store.checkAchievements(
+        difficulty: game.difficulty,
+        time: game.seconds,
+        mistakes: game.mistakes,
+        hintsUsed: game.hintCells.length,
+        isChallenge: game.challengeMode,
+        isOnline: isOnline,
+        isDaily: isDaily,
+        isOnlineWinner: isOnlineWinner,
+      );
+
       HapticFeedback.heavyImpact();
       setState(() => _showConfetti = true);
       Future.delayed(const Duration(milliseconds: 600), () {
@@ -301,7 +392,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       });
     } else if (game.status == GameStatus.lost) {
       _timer?.cancel();
-      store.recordLoss(game.difficulty, game.seconds, game.mistakes);
+      // Daily challenges record their own stats via callbacks
+      if (!isDaily) {
+        store.recordLoss(game.difficulty, game.seconds, game.mistakes);
+      }
       HapticFeedback.vibrate();
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) _showLoseDialog();
@@ -327,8 +421,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       _onlineService.leaveRoom();
     }
 
-    if (!game.gameOver && game.puzzle.isNotEmpty && !game.isGenerating && !isOnline) {
-      // Don't save online games
+    // Clean up daily callbacks
+    if (isDaily) {
+      game.onDailyWon = null;
+      game.onDailyLost = null;
+    }
+
+    // Clean up achievement callback
+    store.onAchievementUnlocked = null;
+    _achievementDismissTimer?.cancel();
+
+    if (!game.gameOver && game.puzzle.isNotEmpty && !game.isGenerating && !isOnline && !isDaily) {
+      // Don't save online or daily games
       store.saveGame(game.toSavedGame());
     }
     super.dispose();
@@ -510,6 +614,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 ),
               ),
               if (_showConfetti) const ConfettiOverlay(),
+              // Achievement unlock notification
+              if (_showingAchievement != null)
+                Positioned(
+                  top: 10,
+                  left: 0,
+                  right: 0,
+                  child: AchievementUnlockNotification(
+                    achievement: _showingAchievement!,
+                    onDismiss: _dismissAchievement,
+                  ),
+                ),
             ],
           ),
         ),
@@ -546,7 +661,22 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         ),
         Row(
           children: [
-            if (game.challengeMode)
+            if (isDaily)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)]),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('📅 ', style: TextStyle(fontSize: 10)),
+                    Text('Daily', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)),
+                  ],
+                ),
+              )
+            else if (game.challengeMode)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -931,6 +1061,27 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildNewGameButton() {
+    // For daily challenges, show "Back to Home" instead of "New Game"
+    if (isDaily) {
+      return GestureDetector(
+        onTap: () {
+          HapticFeedback.mediumImpact();
+          Navigator.pop(context);
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            border: Border.all(color: colors.border, width: 1.5),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          alignment: Alignment.center,
+          child: Text('Back to Home', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.text, letterSpacing: 0.5)),
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: () {
         HapticFeedback.mediumImpact();
@@ -972,6 +1123,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       _showOnlineWinDialog(c);
       return;
     }
+    if (isDaily) {
+      _showDailyWinDialog(c);
+      return;
+    }
     if (game.challengeMode) {
       _showChallengeWinDialog(c);
       return;
@@ -994,6 +1149,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final c = colors;
     if (isOnline) {
       _showOnlineLoseDialog(c);
+      return;
+    }
+    if (isDaily) {
+      _showDailyLoseDialog(c);
       return;
     }
     showDialog(
@@ -1026,6 +1185,40 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           _startTimer();
           setState(() => _showConfetti = false);
         },
+        onHome: () { Navigator.pop(context); Navigator.pop(context); },
+      ),
+    );
+  }
+
+  void _showDailyWinDialog(AppColorScheme c) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _DailyResultDialog(
+        colors: c,
+        isWin: true,
+        time: _fmtTime(game.seconds),
+        mistakes: '${game.mistakes}',
+        difficulty: DailyChallenge.difficultyDisplayName(game.difficulty),
+        currentStreak: store.currentStreak,
+        longestStreak: store.longestStreak,
+        onHome: () { Navigator.pop(context); Navigator.pop(context); },
+      ),
+    );
+  }
+
+  void _showDailyLoseDialog(AppColorScheme c) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _DailyResultDialog(
+        colors: c,
+        isWin: false,
+        time: _fmtTime(game.seconds),
+        mistakes: '${game.mistakes}',
+        difficulty: DailyChallenge.difficultyDisplayName(game.difficulty),
+        currentStreak: store.currentStreak,
+        longestStreak: store.longestStreak,
         onHome: () { Navigator.pop(context); Navigator.pop(context); },
       ),
     );
@@ -1420,6 +1613,159 @@ class _OnlineResultDialog extends StatelessWidget {
   Widget _stat(String val, String lbl, Color color) => Column(
     children: [
       Text(val, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: color)),
+      const SizedBox(height: 2),
+      Text(lbl, style: TextStyle(fontSize: 10, color: colors.textMuted)),
+    ],
+  );
+}
+
+// ── Daily Result Dialog ──
+class _DailyResultDialog extends StatelessWidget {
+  final AppColorScheme colors;
+  final bool isWin;
+  final String time, mistakes, difficulty;
+  final int currentStreak, longestStreak;
+  final VoidCallback onHome;
+
+  const _DailyResultDialog({
+    required this.colors,
+    required this.isWin,
+    required this.time,
+    required this.mistakes,
+    required this.difficulty,
+    required this.currentStreak,
+    required this.longestStreak,
+    required this.onHome,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: colors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(isWin ? '🎉' : '💀', style: const TextStyle(fontSize: 50)),
+            const SizedBox(height: 10),
+            Text(
+              isWin ? 'Daily Complete!' : 'Game Over',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                color: isWin ? const Color(0xFF10B981) : colors.errColor,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              isWin ? 'Great job! See you tomorrow!' : 'Try again tomorrow!',
+              style: TextStyle(fontSize: 14, color: colors.textMuted),
+            ),
+            const SizedBox(height: 14),
+            // Stats
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: colors.surface2, borderRadius: BorderRadius.circular(14)),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _stat(time, 'Time'),
+                  _stat(mistakes, 'Mistakes'),
+                  _stat(difficulty, 'Difficulty'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Streak info
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: isWin
+                    ? const LinearGradient(colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)])
+                    : null,
+                color: isWin ? null : colors.surface2,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Column(
+                    children: [
+                      Text(
+                        DailyChallenge.streakEmoji(currentStreak),
+                        style: const TextStyle(fontSize: 24),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$currentStreak day${currentStreak != 1 ? 's' : ''}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: isWin ? Colors.white : colors.text,
+                        ),
+                      ),
+                      Text(
+                        'Current Streak',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isWin ? Colors.white.withValues(alpha: 0.8) : colors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    width: 1,
+                    height: 50,
+                    color: isWin ? Colors.white.withValues(alpha: 0.3) : colors.border,
+                  ),
+                  Column(
+                    children: [
+                      const Text('🏆', style: TextStyle(fontSize: 24)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$longestStreak day${longestStreak != 1 ? 's' : ''}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: isWin ? Colors.white : colors.text,
+                        ),
+                      ),
+                      Text(
+                        'Best Streak',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isWin ? Colors.white.withValues(alpha: 0.8) : colors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (isWin) ...[
+              const SizedBox(height: 10),
+              Text(
+                DailyChallenge.streakMessage(currentStreak),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: colors.primary,
+                ),
+              ),
+            ],
+            const SizedBox(height: 18),
+            _gradientBtn('Back to Home', onHome),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _stat(String val, String lbl) => Column(
+    children: [
+      Text(val, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: colors.primary)),
       const SizedBox(height: 2),
       Text(lbl, style: TextStyle(fontSize: 10, color: colors.textMuted)),
     ],

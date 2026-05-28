@@ -55,6 +55,11 @@ class GameState extends ChangeNotifier {
   void Function(int totalSeconds)? onGameWon;
   void Function()? onGameLost;
 
+  // Daily challenge mode
+  bool dailyMode = false;
+  void Function(int totalSeconds, int mistakes)? onDailyWon;
+  void Function(int totalSeconds, int mistakes)? onDailyLost;
+
   static const maxMistakes = 3;
 
   bool get hasSelection => selectedRow != null && selectedCol != null;
@@ -63,12 +68,13 @@ class GameState extends ChangeNotifier {
   bool get isGenerating => _generating;
   bool _generating = false;
 
-  Future<void> newGame(String diff, {int? seed, String? pin, bool online = false}) async {
+  Future<void> newGame(String diff, {int? seed, String? pin, bool online = false, bool isDaily = false}) async {
     difficulty = diff;
     challengeMode = seed != null;
     challengeSeed = seed;
     challengePin = pin;
     onlineMode = online;
+    dailyMode = isDaily;
 
     // Reset state immediately
     puzzle = [];
@@ -118,6 +124,7 @@ class GameState extends ChangeNotifier {
     notesMode = false;
     gameOver = false;
     challengeMode = false;
+    dailyMode = false;
     status = GameStatus.playing;
     notifyListeners();
   }
@@ -175,6 +182,8 @@ class GameState extends ChangeNotifier {
           }
           // Trigger online lost callback
           if (onlineMode) onGameLost?.call();
+          // Trigger daily lost callback
+          if (dailyMode) onDailyLost?.call(seconds, mistakes);
         }
       } else {
         _checkWin();
@@ -286,6 +295,8 @@ class GameState extends ChangeNotifier {
     status = GameStatus.won;
     // Trigger online win callback
     if (onlineMode) onGameWon?.call(seconds);
+    // Trigger daily win callback
+    if (dailyMode) onDailyWon?.call(seconds, mistakes);
   }
 
   int countForNumber(int n) {
