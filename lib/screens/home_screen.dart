@@ -6,9 +6,10 @@ import '../state/game_store.dart';
 import '../state/game_state.dart';
 import '../screens/game_screen.dart';
 import '../widgets/challenge_modal.dart';
-import '../widgets/profile_edit_modal.dart';
 import '../widgets/achievements_modal.dart';
 import '../widgets/statistics_modal.dart';
+import '../widgets/settings_modal.dart';
+import '../widgets/learning_modal.dart';
 import '../utils/daily_challenge.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -60,14 +61,6 @@ class _HomeScreenState extends State<HomeScreen> {
     'medium': '🔥',
     'hard': '💪',
     'expert': '🏆',
-  };
-
-  // Difficulty descriptions
-  static const _diffDesc = {
-    'easy': '38+ clues',
-    'medium': '30-37 clues',
-    'hard': '25-29 clues',
-    'expert': '22-24 clues',
   };
 
   void _navigateToGame({int? seed, String? pin, String? diff, bool isOnline = false, bool isDaily = false}) {
@@ -122,24 +115,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   _buildHeader(c),
                   const SizedBox(height: 20),
-                  _buildProfileCard(c),
-                  const SizedBox(height: 16),
-                  _buildStats(c),
+                  // 0\. User Identity & Motivation
+                  // _buildProfileCard(c),
+                  // const SizedBox(height: 20),
+                  // 1. Primary Action - New Game
+                  _buildPlaySection(c),
                   const SizedBox(height: 20),
+                  // 2. Time-sensitive - Daily Challenge
                   _buildDailyChallengeCard(c),
                   const SizedBox(height: 20),
-                  _sectionLabel('Select Difficulty', c),
-                  const SizedBox(height: 12),
-                  _buildDifficultyCards(c),
-                  const SizedBox(height: 16),
-                  _buildPlayButton(),
-                  if (store.savedGame != null) ...[
-                    const SizedBox(height: 10),
-                    _buildContinueButton(c),
-                  ],
-                  const SizedBox(height: 10),
-                  _buildChallengeButton(),
-                  const SizedBox(height: 24),
+                  // 4. Quick Stats Overview
+                  _buildStats(c),
+                  const SizedBox(height: 20),
+                  // 5. Historical Data
                   _sectionLabel('Recent Scores', c),
                   const SizedBox(height: 9),
                   _buildScores(c),
@@ -164,11 +152,11 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         Row(
           children: [
-            _iconButton(store.isDark ? '☀️' : '🌙', widget.onToggleTheme, c),
+            _iconButton('📚', _showLearning, c),
             const SizedBox(width: 8),
             _achievementsButton(c),
             const SizedBox(width: 8),
-            _iconButton('⚙️', () => _showProfileEdit(), c),
+            _iconButton('⚙️', _showSettings, c),
           ],
         ),
       ],
@@ -236,10 +224,31 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showLearning() {
+    HapticFeedback.lightImpact();
+    showDialog(
+      context: context,
+      builder: (_) => LearningModal(colors: colors),
+    );
+  }
+
+  void _showSettings() {
+    HapticFeedback.lightImpact();
+    showDialog(
+      context: context,
+      builder: (_) => SettingsModal(
+        store: store,
+        colors: colors,
+        onToggleTheme: widget.onToggleTheme,
+        onProfileUpdate: () => setState(() {}),
+      ),
+    );
+  }
+
   Widget _buildProfileCard(AppColorScheme c) {
     final color = _parseColor(store.avatarColor);
     return GestureDetector(
-      onTap: _showProfileEdit,
+      onTap: _showSettings,
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -573,38 +582,144 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _sectionLabel(String text, AppColorScheme c) {
-    return Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.textMuted, letterSpacing: 1));
+  Widget _buildPlaySection(AppColorScheme c) {
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: c.border),
+        boxShadow: [
+          BoxShadow(
+            color: c.primary.withValues(alpha: 0.1),
+            blurRadius: 30,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF4F6EF7), Color(0xFFA855F7)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.grid_3x3_rounded, color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'New Puzzle',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: c.text,
+                        ),
+                      ),
+                      Text(
+                        'Select difficulty and start playing',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: c.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Difficulty cards - 2x2 grid
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: _buildDifficultyGrid(c),
+          ),
+          const SizedBox(height: 14),
+
+          // Main play button
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: _buildMainPlayButton(c),
+          ),
+          const SizedBox(height: 10),
+
+          // Secondary buttons
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            child: Row(
+              children: [
+                if (store.savedGame != null) ...[
+                  Expanded(child: _buildContinueButton(c)),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(child: _buildChallengeButton(c)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildDifficultyCards(AppColorScheme c) {
+  Widget _buildDifficultyGrid(AppColorScheme c) {
+    final diffColors = {
+      'easy': const Color(0xFF10B981),
+      'medium': const Color(0xFF3B82F6),
+      'hard': const Color(0xFFF59E0B),
+      'expert': const Color(0xFFEF4444),
+    };
+    final diffClues = {
+      'easy': '38+ clues',
+      'medium': '30-37 clues',
+      'hard': '25-29 clues',
+      'expert': '22-24 clues',
+    };
+
     return Column(
       children: [
         Row(
           children: [
-            Expanded(child: _buildDifficultyCard('easy', c)),
+            Expanded(child: _buildDifficultyCard('easy', diffColors, diffClues, c)),
             const SizedBox(width: 10),
-            Expanded(child: _buildDifficultyCard('medium', c)),
+            Expanded(child: _buildDifficultyCard('medium', diffColors, diffClues, c)),
           ],
         ),
         const SizedBox(height: 10),
         Row(
           children: [
-            Expanded(child: _buildDifficultyCard('hard', c)),
+            Expanded(child: _buildDifficultyCard('hard', diffColors, diffClues, c)),
             const SizedBox(width: 10),
-            Expanded(child: _buildDifficultyCard('expert', c)),
+            Expanded(child: _buildDifficultyCard('expert', diffColors, diffClues, c)),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildDifficultyCard(String diff, AppColorScheme c) {
+  Widget _buildDifficultyCard(
+    String diff,
+    Map<String, Color> diffColors,
+    Map<String, String> diffClues,
+    AppColorScheme c,
+  ) {
     final isSelected = diff == _difficulty;
-    final bestTime = store.bestTimes[diff];
-    final badge = _diffBadge(diff, c);
+    final color = diffColors[diff]!;
     final icon = _diffIcons[diff] ?? '🎮';
-    final desc = _diffDesc[diff] ?? '';
+    final clues = diffClues[diff] ?? '';
+    final bestTime = store.bestTimes[diff];
+    final stats = store.getStatsForDifficulty(diff);
+    final winRate = stats.played > 0 ? (stats.winRate * 100).toInt() : null;
 
     return GestureDetector(
       onTap: () {
@@ -613,27 +728,14 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? badge.$2 : c.border,
-            width: isSelected ? 2.5 : 1.5,
+            color: isSelected ? color : c.border,
+            width: isSelected ? 2.5 : 1,
           ),
-          boxShadow: isSelected ? [
-            BoxShadow(
-              color: badge.$2.withValues(alpha: 0.25),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ] : [
-            BoxShadow(
-              color: c.primary.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -641,62 +743,120 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Text(icon, style: const TextStyle(fontSize: 18)),
-                    const SizedBox(width: 8),
-                    Text(
-                      diff[0].toUpperCase() + diff.substring(1),
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: isSelected ? badge.$2 : c.text,
-                      ),
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: c.surface2,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(icon, style: const TextStyle(fontSize: 20)),
                 ),
                 if (isSelected)
                   Container(
-                    width: 22,
-                    height: 22,
+                    padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
+                      color: color,
                       shape: BoxShape.circle,
-                      color: badge.$2,
                     ),
-                    child: const Icon(Icons.check, size: 14, color: Colors.white),
+                    child: const Icon(Icons.check, size: 12, color: Colors.white),
+                  )
+                else if (winRate != null)
+                  Text(
+                    '$winRate%',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: c.textMuted,
+                    ),
                   ),
               ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              desc,
-              style: TextStyle(fontSize: 11, color: c.textMuted),
-            ),
             const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: badge.$1.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(8),
+            Text(
+              diff[0].toUpperCase() + diff.substring(1),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: c.text,
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.timer_outlined,
-                    size: 14,
-                    color: bestTime != null ? badge.$2 : c.textMuted,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              clues,
+              style: TextStyle(
+                fontSize: 10,
+                color: c.textMuted,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  Icons.emoji_events_outlined,
+                  size: 12,
+                  color: bestTime != null ? c.primary : c.textMuted,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  bestTime != null ? _fmtTime(bestTime) : 'No record',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: bestTime != null ? c.text : c.textMuted,
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    bestTime != null ? _fmtTime(bestTime) : 'No record',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: bestTime != null ? badge.$2 : c.textMuted,
-                    ),
-                  ),
-                ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMainPlayButton(AppColorScheme c) {
+    final icon = _diffIcons[_difficulty] ?? '🎮';
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        store.clearSavedGame();
+        _navigateToGame();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF4F6EF7), Color(0xFFA855F7)],
+          ),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF4F6EF7).withValues(alpha: 0.4),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 26),
+            const SizedBox(width: 8),
+            Text(
+              'New Game',
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '($icon ${_difficulty[0].toUpperCase()}${_difficulty.substring(1)})',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.85),
               ),
             ),
           ],
@@ -705,55 +865,89 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildPlayButton() {
+  Widget _buildContinueButton(AppColorScheme c) {
+    final savedTime = store.savedGame?.seconds ?? 0;
+
     return GestureDetector(
       onTap: () {
-        store.clearSavedGame();
-        _navigateToGame();
+        HapticFeedback.lightImpact();
+        _continueGame();
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Color(0xFF4F6EF7), Color(0xFFA855F7)]),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: const Color(0xFF4F6EF7).withValues(alpha:0.4), blurRadius: 22, offset: const Offset(0, 6))],
-        ),
-        alignment: Alignment.center,
-        child: const Text('▶  New Game', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5)),
-      ),
-    );
-  }
-
-  Widget _buildContinueButton(AppColorScheme c) {
-    return GestureDetector(
-      onTap: _continueGame,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 13),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
         decoration: BoxDecoration(
           color: c.surface,
           border: Border.all(color: c.primary, width: 1.5),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
         ),
-        alignment: Alignment.center,
-        child: Text('↩  Continue Game', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: c.primary)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.play_circle_outline, color: c.primary, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Continue',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: c.primary,
+              ),
+            ),
+            Text(
+              ' · ${_fmtTime(savedTime)}',
+              style: TextStyle(
+                fontSize: 12,
+                color: c.textMuted,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildChallengeButton() {
+  Widget _buildChallengeButton(AppColorScheme c) {
     return GestureDetector(
-      onTap: () => _showChallengeModal(),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        _showChallengeModal();
+      },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Color(0xFFF72585), Color(0xFF7209B7)]),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: const Color(0xFFF72585).withValues(alpha:0.35), blurRadius: 22, offset: const Offset(0, 6))],
+          gradient: const LinearGradient(
+            colors: [Color(0xFFF72585), Color(0xFF7209B7)],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFF72585).withValues(alpha: 0.25),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        alignment: Alignment.center,
-        child: const Text('⚔️  Challenge a Friend', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5)),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('⚔️', style: TextStyle(fontSize: 16)),
+            SizedBox(width: 8),
+            Text(
+              'Challenge Friend',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _sectionLabel(String text, AppColorScheme c) {
+    return Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.textMuted, letterSpacing: 1));
   }
 
   Widget _buildScores(AppColorScheme c) {
@@ -815,17 +1009,6 @@ class _HomeScreenState extends State<HomeScreen> {
       default:
         return (c.surface2, c.textMuted);
     }
-  }
-
-  void _showProfileEdit() {
-    showDialog(
-      context: context,
-      builder: (_) => ProfileEditModal(
-        store: store,
-        colors: colors,
-        onSave: () => setState(() {}),
-      ),
-    );
   }
 
   void _showChallengeModal() {

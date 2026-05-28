@@ -7,7 +7,9 @@ import '../state/game_state.dart';
 import '../widgets/confetti_overlay.dart';
 import '../widgets/opponent_progress.dart';
 import '../widgets/achievements_modal.dart';
+import '../widgets/coach_marks_overlay.dart';
 import '../services/online_challenge_service.dart';
+import '../services/sound_service.dart';
 import '../models/online_room.dart';
 import '../models/achievement.dart';
 import '../utils/daily_challenge.dart';
@@ -36,6 +38,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Timer? _timer;
   bool _showConfetti = false;
   final FocusNode _focusNode = FocusNode();
+  final SoundService _sound = SoundService();
+
+  // Coach marks state
+  bool _showCoachMarks = false;
+  final GlobalKey _boardKey = GlobalKey();
+  final GlobalKey _numpadKey = GlobalKey();
+  final GlobalKey _statsKey = GlobalKey();
+  final GlobalKey _undoKey = GlobalKey();
+  final GlobalKey _eraseKey = GlobalKey();
+  final GlobalKey _notesKey = GlobalKey();
+  final GlobalKey _hintKey = GlobalKey();
 
   // Animation for selected cell
   late AnimationController _selectionController;
@@ -103,6 +116,124 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
     // Setup achievement callback
     store.onAchievementUnlocked = _onAchievementUnlocked;
+
+    // Check if we should show coach marks (first game)
+    if (store.shouldShowCoachMarks && !isOnline && !isDaily) {
+      // Delay to allow UI to build and get positions
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkAndShowCoachMarks();
+      });
+    }
+  }
+
+  void _checkAndShowCoachMarks() {
+    // Wait for puzzle to be generated
+    if (game.isGenerating || game.puzzle.isEmpty) {
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (mounted) _checkAndShowCoachMarks();
+      });
+      return;
+    }
+
+    // Show coach marks after a short delay
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted && !_showCoachMarks) {
+        setState(() => _showCoachMarks = true);
+      }
+    });
+  }
+
+  void _onCoachMarksComplete() {
+    setState(() => _showCoachMarks = false);
+    store.markCoachMarksSeen();
+  }
+
+  List<CoachMark> _buildCoachMarks() {
+    final marks = <CoachMark>[];
+
+    Rect? getRect(GlobalKey key) {
+      final renderBox = key.currentContext?.findRenderObject() as RenderBox?;
+      if (renderBox == null) return null;
+      final position = renderBox.localToGlobal(Offset.zero);
+      return Rect.fromLTWH(
+        position.dx,
+        position.dy,
+        renderBox.size.width,
+        renderBox.size.height,
+      );
+    }
+
+    final boardRect = getRect(_boardKey);
+    final numpadRect = getRect(_numpadKey);
+    final statsRect = getRect(_statsKey);
+    final notesRect = getRect(_notesKey);
+    final hintRect = getRect(_hintKey);
+    final undoRect = getRect(_undoKey);
+
+    if (boardRect != null) {
+      marks.add(CoachMark(
+        icon: '🎯',
+        title: 'The Sudoku Board',
+        description: 'Tap any empty cell to select it. Fill in numbers 1-9 so each row, column, and 3x3 box contains all digits.',
+        targetRect: boardRect,
+        position: TooltipPosition.below,
+        spotlightPadding: 4,
+      ));
+    }
+
+    if (numpadRect != null) {
+      marks.add(CoachMark(
+        icon: '🔢',
+        title: 'Number Pad',
+        description: 'After selecting a cell, tap a number to fill it in. The count shows how many of each number remain.',
+        targetRect: numpadRect,
+        position: TooltipPosition.above,
+        spotlightPadding: 4,
+      ));
+    }
+
+    if (statsRect != null) {
+      marks.add(CoachMark(
+        icon: '⏱️',
+        title: 'Game Stats',
+        description: 'Track your time and mistakes. Three mistakes and it\'s game over! Tap the pause button to take a break.',
+        targetRect: statsRect,
+        position: TooltipPosition.below,
+      ));
+    }
+
+    if (notesRect != null) {
+      marks.add(CoachMark(
+        icon: '✏️',
+        title: 'Notes Mode',
+        description: 'Toggle notes to mark possible numbers in cells. Great for keeping track of your deductions!',
+        targetRect: notesRect,
+        position: TooltipPosition.above,
+      ));
+    }
+
+    if (hintRect != null) {
+      marks.add(CoachMark(
+        icon: '💡',
+        title: 'Need Help?',
+        description: 'Stuck? Use hints sparingly - they\'ll reveal a correct number but use them wisely!',
+        targetRect: hintRect,
+        position: TooltipPosition.above,
+      ));
+    }
+
+    if (undoRect != null) {
+      marks.add(CoachMark(
+        icon: '↩️',
+        title: 'Made a Mistake?',
+        description: 'Use Undo to go back, or Erase to clear a cell. Don\'t worry, everyone makes mistakes!',
+        targetRect: undoRect,
+        position: TooltipPosition.above,
+        spotlightPadding: 12,
+      ));
+    }
+
+    return marks;
   }
 
   void _onAchievementUnlocked(Achievement achievement) {
@@ -118,7 +249,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       _showingAchievement = _pendingAchievements.removeAt(0);
     });
 
-    HapticFeedback.mediumImpact();
+    _sound.playAchievement();
 
     // Auto-dismiss after 4 seconds
     _achievementDismissTimer?.cancel();
@@ -385,7 +516,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         isOnlineWinner: isOnlineWinner,
       );
 
-      HapticFeedback.heavyImpact();
+      _sound.playWin();
       setState(() => _showConfetti = true);
       Future.delayed(const Duration(milliseconds: 600), () {
         if (mounted) _showWinDialog();
@@ -396,7 +527,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       if (!isDaily) {
         store.recordLoss(game.difficulty, game.seconds, game.mistakes);
       }
-      HapticFeedback.vibrate();
+      _sound.playLose();
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) _showLoseDialog();
       });
@@ -489,7 +620,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         key.keyId <= LogicalKeyboardKey.digit9.keyId) {
       final num = key.keyId - LogicalKeyboardKey.digit0.keyId;
       if (game.countForNumber(num) < 9) {
-        HapticFeedback.lightImpact();
+        _sound.playInput();
         game.inputNumber(num);
       }
       return;
@@ -500,7 +631,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         key.keyId <= LogicalKeyboardKey.numpad9.keyId) {
       final num = key.keyId - LogicalKeyboardKey.numpad0.keyId;
       if (game.countForNumber(num) < 9) {
-        HapticFeedback.lightImpact();
+        _sound.playInput();
         game.inputNumber(num);
       }
       return;
@@ -519,25 +650,25 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
     // Backspace/Delete to erase
     if (key == LogicalKeyboardKey.backspace || key == LogicalKeyboardKey.delete) {
-      HapticFeedback.lightImpact();
+      _sound.playErase();
       game.eraseCell();
     }
 
     // N for notes toggle
     if (key == LogicalKeyboardKey.keyN) {
-      HapticFeedback.selectionClick();
+      _sound.playClick();
       game.toggleNotes();
     }
 
     // Z for undo
     if (key == LogicalKeyboardKey.keyZ) {
-      HapticFeedback.lightImpact();
+      _sound.playUndo();
       game.undo();
     }
 
     // H for hint
     if (key == LogicalKeyboardKey.keyH) {
-      HapticFeedback.mediumImpact();
+      _sound.playHint();
       game.giveHint();
     }
 
@@ -552,13 +683,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     int c = game.selectedCol ?? 4;
     r = (r + dr).clamp(0, 8);
     c = (c + dc).clamp(0, 8);
-    HapticFeedback.selectionClick();
+    _sound.playTap();
     game.selectCell(r, c);
     _selectionController.forward(from: 0);
   }
 
   void _onCellTap(int r, int c) {
-    HapticFeedback.selectionClick();
+    _sound.playTap();
     game.selectCell(r, c);
     _selectionController.forward(from: 0);
   }
@@ -580,53 +711,67 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         onKeyEvent: _handleKeyEvent,
         child: Scaffold(
         backgroundColor: c.bg,
-        body: SafeArea(
-          child: Stack(
-            children: [
-              SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 460),
-                    child: Column(
-                      children: [
-                        _buildHeader(c),
-                        const SizedBox(height: 16),
-                        // Show opponent progress for online challenges
-                        if (isOnline && _opponent != null) ...[
-                          OpponentProgressBar(opponent: _opponent!, colors: c),
-                          const SizedBox(height: 12),
-                        ],
-                        _buildStatsBar(c),
-                        const SizedBox(height: 8),
-                        _buildProgressBar(c),
-                        const SizedBox(height: 14),
-                        _buildBoard(c),
-                        const SizedBox(height: 14),
-                        _buildNumpad(c),
-                        const SizedBox(height: 10),
-                        _buildActionBar(c),
-                        const SizedBox(height: 12),
-                        _buildNewGameButton(),
-                      ],
+        body: Stack(
+          children: [
+            // Main content inside SafeArea
+            SafeArea(
+              child: Stack(
+                children: [
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 460),
+                        child: Column(
+                          children: [
+                            _buildHeader(c),
+                            const SizedBox(height: 16),
+                            // Show opponent progress for online challenges
+                            if (isOnline && _opponent != null) ...[
+                              OpponentProgressBar(opponent: _opponent!, colors: c),
+                              const SizedBox(height: 12),
+                            ],
+                            KeyedSubtree(key: _statsKey, child: _buildStatsBar(c)),
+                            const SizedBox(height: 8),
+                            _buildProgressBar(c),
+                            const SizedBox(height: 14),
+                            KeyedSubtree(key: _boardKey, child: _buildBoard(c)),
+                            const SizedBox(height: 14),
+                            KeyedSubtree(key: _numpadKey, child: _buildNumpad(c)),
+                            const SizedBox(height: 10),
+                            _buildActionBar(c),
+                            const SizedBox(height: 12),
+                            _buildNewGameButton(),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
+                  if (_showConfetti) const ConfettiOverlay(),
+                  // Achievement unlock notification
+                  if (_showingAchievement != null)
+                    Positioned(
+                      top: 10,
+                      left: 0,
+                      right: 0,
+                      child: AchievementUnlockNotification(
+                        achievement: _showingAchievement!,
+                        onDismiss: _dismissAchievement,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            // Coach marks overlay OUTSIDE SafeArea to cover full screen
+            if (_showCoachMarks)
+              Positioned.fill(
+                child: CoachMarksOverlay(
+                  colors: colors,
+                  marks: _buildCoachMarks(),
+                  onComplete: _onCoachMarksComplete,
                 ),
               ),
-              if (_showConfetti) const ConfettiOverlay(),
-              // Achievement unlock notification
-              if (_showingAchievement != null)
-                Positioned(
-                  top: 10,
-                  left: 0,
-                  right: 0,
-                  child: AchievementUnlockNotification(
-                    achievement: _showingAchievement!,
-                    onDismiss: _dismissAchievement,
-                  ),
-                ),
-            ],
-          ),
+          ],
         ),
       ),
     ),
@@ -957,7 +1102,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             padding: const EdgeInsets.symmetric(horizontal: 2.5),
             child: GestureDetector(
               onTap: depleted ? null : () {
-                HapticFeedback.lightImpact();
+                _sound.playInput();
                 game.inputNumber(n);
               },
               child: AspectRatio(
@@ -1013,25 +1158,37 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Widget _buildActionBar(AppColorScheme c) {
     return Row(
       children: [
-        _actionBtn('↩', 'Undo', 'Z', false, () {
-          HapticFeedback.lightImpact();
-          game.undo();
-        }, c),
+        KeyedSubtree(
+          key: _undoKey,
+          child: _actionBtn('↩', 'Undo', 'Z', false, () {
+            _sound.playUndo();
+            game.undo();
+          }, c),
+        ),
         const SizedBox(width: 8),
-        _actionBtn('⌫', 'Erase', '⌫', false, () {
-          HapticFeedback.lightImpact();
-          game.eraseCell();
-        }, c),
+        KeyedSubtree(
+          key: _eraseKey,
+          child: _actionBtn('⌫', 'Erase', '⌫', false, () {
+            _sound.playErase();
+            game.eraseCell();
+          }, c),
+        ),
         const SizedBox(width: 8),
-        _actionBtn('✏️', 'Notes', 'N', game.notesMode, () {
-          HapticFeedback.selectionClick();
-          game.toggleNotes();
-        }, c),
+        KeyedSubtree(
+          key: _notesKey,
+          child: _actionBtn('✏️', 'Notes', 'N', game.notesMode, () {
+            _sound.playClick();
+            game.toggleNotes();
+          }, c),
+        ),
         const SizedBox(width: 8),
-        _actionBtn('💡', 'Hint', 'H', false, () {
-          HapticFeedback.mediumImpact();
-          game.giveHint();
-        }, c),
+        KeyedSubtree(
+          key: _hintKey,
+          child: _actionBtn('💡', 'Hint', 'H', false, () {
+            _sound.playHint();
+            game.giveHint();
+          }, c),
+        ),
       ],
     );
   }

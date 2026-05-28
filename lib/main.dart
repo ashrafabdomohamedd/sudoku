@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'state/game_store.dart';
 import 'state/game_state.dart';
+import 'services/sound_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/home_screen.dart';
 
@@ -54,10 +55,18 @@ class _SudokuAppState extends State<SudokuApp> {
   @override
   void initState() {
     super.initState();
-    _store.load().then((_) {
+    _store.load().then((_) async {
+      await SoundService().init(_store);
       setState(() => _loaded = true);
     });
-    _store.addListener(() => setState(() {}));
+    _store.addListener(() {
+      // Update sound service when settings change
+      SoundService().updateSettings(
+        sound: _store.soundEnabled,
+        haptic: _store.hapticEnabled,
+      );
+      setState(() {});
+    });
   }
 
   void _toggleTheme() {

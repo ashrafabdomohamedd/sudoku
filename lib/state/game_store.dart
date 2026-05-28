@@ -133,6 +133,16 @@ class GameStore extends ChangeNotifier {
     'expert': DifficultyStats(),
   };
 
+  // Sound & Haptics Settings
+  bool soundEnabled = true;
+  bool hapticEnabled = true;
+
+  // Learning Mode
+  bool hasSeenTutorial = false;
+  bool hasSeenCoachMarks = false;
+  // Developer config - set to true to always show coach marks (for testing)
+  bool alwaysShowCoachMarks = false;
+
   bool get isDark => theme == 'dark';
 
   // Achievement helpers
@@ -324,6 +334,15 @@ class GameStore extends ChangeNotifier {
             }
           }
         }
+
+        // Sound & Haptics
+        soundEnabled = j['soundEnabled'] ?? true;
+        hapticEnabled = j['hapticEnabled'] ?? true;
+
+        // Learning Mode
+        hasSeenTutorial = j['hasSeenTutorial'] ?? false;
+        hasSeenCoachMarks = j['hasSeenCoachMarks'] ?? false;
+        alwaysShowCoachMarks = j['alwaysShowCoachMarks'] ?? false;
       } catch (_) {}
     }
     notifyListeners();
@@ -370,6 +389,13 @@ class GameStore extends ChangeNotifier {
       // Statistics data
       'totalPlayTime': totalPlayTime,
       'difficultyStats': difficultyStats.map((k, v) => MapEntry(k, v.toJson())),
+      // Sound & Haptics
+      'soundEnabled': soundEnabled,
+      'hapticEnabled': hapticEnabled,
+      // Learning Mode
+      'hasSeenTutorial': hasSeenTutorial,
+      'hasSeenCoachMarks': hasSeenCoachMarks,
+      'alwaysShowCoachMarks': alwaysShowCoachMarks,
     }));
   }
 
@@ -378,6 +404,34 @@ class GameStore extends ChangeNotifier {
     save();
     notifyListeners();
   }
+
+  void toggleSound() {
+    soundEnabled = !soundEnabled;
+    save();
+    notifyListeners();
+  }
+
+  void toggleHaptic() {
+    hapticEnabled = !hapticEnabled;
+    save();
+    notifyListeners();
+  }
+
+  void markTutorialSeen() {
+    hasSeenTutorial = true;
+    save();
+    notifyListeners();
+  }
+
+  void markCoachMarksSeen() {
+    hasSeenCoachMarks = true;
+    save();
+    notifyListeners();
+  }
+
+  /// Check if coach marks should be shown (TODO: remove)
+  // bool get shouldShowCoachMarks => alwaysShowCoachMarks || !hasSeenCoachMarks;
+  bool get shouldShowCoachMarks => true;
 
   void updateProfile(String newName, String newColor) {
     name = newName.isNotEmpty ? newName : name;
