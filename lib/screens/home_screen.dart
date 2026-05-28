@@ -8,6 +8,7 @@ import '../screens/game_screen.dart';
 import '../widgets/challenge_modal.dart';
 import '../widgets/profile_edit_modal.dart';
 import '../widgets/achievements_modal.dart';
+import '../widgets/statistics_modal.dart';
 import '../utils/daily_challenge.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -299,34 +300,85 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildStats(AppColorScheme c) {
-    return Row(
+    return GestureDetector(
+      onTap: _showStatistics,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: c.surface,
+          border: Border.all(color: c.border),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: c.primary.withValues(alpha: 0.1), blurRadius: 24, offset: const Offset(0, 4))],
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(child: _statCard('${store.played}', 'Played', Icons.grid_3x3_rounded, c)),
+                _verticalStatDivider(c),
+                Expanded(child: _statCard('${store.won}', 'Won', Icons.emoji_events_outlined, c)),
+                _verticalStatDivider(c),
+                Expanded(child: _statCard(store.winRate, 'Win Rate', Icons.percent_rounded, c)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: c.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.bar_chart_rounded, size: 16, color: c.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Tap for detailed statistics',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: c.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_forward_ios, size: 12, color: c.primary),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _verticalStatDivider(AppColorScheme c) {
+    return Container(
+      width: 1,
+      height: 40,
+      color: c.border,
+    );
+  }
+
+  Widget _statCard(String value, String label, IconData icon, AppColorScheme c) {
+    return Column(
       children: [
-        _statCard('${store.played}', 'Played', c),
-        const SizedBox(width: 10),
-        _statCard('${store.won}', 'Won', c),
-        const SizedBox(width: 10),
-        _statCard(store.winRate, 'Win Rate', c),
+        Icon(icon, size: 18, color: c.primary.withValues(alpha: 0.7)),
+        const SizedBox(height: 6),
+        Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: c.primary)),
+        const SizedBox(height: 3),
+        Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: c.textMuted)),
       ],
     );
   }
 
-  Widget _statCard(String value, String label, AppColorScheme c) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        decoration: BoxDecoration(
-          color: c.surface,
-          border: Border.all(color: c.border),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: c.primary.withValues(alpha:0.1), blurRadius: 24, offset: const Offset(0, 4))],
-        ),
-        child: Column(
-          children: [
-            Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: c.primary)),
-            const SizedBox(height: 3),
-            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: c.textMuted)),
-          ],
-        ),
+  void _showStatistics() {
+    HapticFeedback.lightImpact();
+    showDialog(
+      context: context,
+      builder: (_) => StatisticsModal(
+        store: store,
+        colors: colors,
       ),
     );
   }

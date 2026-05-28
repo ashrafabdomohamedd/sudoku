@@ -16,6 +16,38 @@ class ScoreEntry {
       ScoreEntry(diff: j['diff'], time: j['time'], mistakes: j['mistakes'], date: j['date']);
 }
 
+/// Statistics for a specific difficulty level
+class DifficultyStats {
+  int played;
+  int won;
+  int totalTime; // Total seconds for completed games
+  int fastestTime; // Fastest completion time (or 0 if none)
+
+  DifficultyStats({
+    this.played = 0,
+    this.won = 0,
+    this.totalTime = 0,
+    this.fastestTime = 0,
+  });
+
+  double get winRate => played > 0 ? won / played : 0;
+  int get averageTime => won > 0 ? totalTime ~/ won : 0;
+
+  Map<String, dynamic> toJson() => {
+    'played': played,
+    'won': won,
+    'totalTime': totalTime,
+    'fastestTime': fastestTime,
+  };
+
+  factory DifficultyStats.fromJson(Map<String, dynamic> j) => DifficultyStats(
+    played: j['played'] ?? 0,
+    won: j['won'] ?? 0,
+    totalTime: j['totalTime'] ?? 0,
+    fastestTime: j['fastestTime'] ?? 0,
+  );
+}
+
 class SavedGame {
   final List<List<int>> puzzle;
   final List<List<int>> solution;
@@ -92,6 +124,15 @@ class GameStore extends ChangeNotifier {
   // Callback for newly unlocked achievements
   void Function(Achievement)? onAchievementUnlocked;
 
+  // Detailed Statistics
+  int totalPlayTime = 0; // Total seconds played across all games
+  Map<String, DifficultyStats> difficultyStats = {
+    'easy': DifficultyStats(),
+    'medium': DifficultyStats(),
+    'hard': DifficultyStats(),
+    'expert': DifficultyStats(),
+  };
+
   bool get isDark => theme == 'dark';
 
   // Achievement helpers
@@ -103,6 +144,89 @@ class GameStore extends ChangeNotifier {
 
   List<Achievement> get unlockedAchievementsList =>
       unlockedAchievements.map((id) => Achievements.getById(id)).whereType<Achievement>().toList();
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATISTICS HELPERS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Get overall average completion time (for won games only)
+  int get averageTime {
+    int totalTime = 0;
+    int totalWon = 0;
+    for (final stats in difficultyStats.values) {
+      totalTime += stats.totalTime;
+      totalWon += stats.won;
+    }
+    return totalWon > 0 ? totalTime ~/ totalWon : 0;
+  }
+
+  /// Get total games for a specific difficulty
+  DifficultyStats getStatsForDifficulty(String diff) {
+    return difficultyStats[diff] ?? DifficultyStats();
+  }
+
+  /// Format time as MM:SS
+  String formatTime(int seconds) {
+    if (seconds <= 0) return '--:--';
+    final mins = seconds ~/ 60;
+    final secs = seconds % 60;
+    return '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+  }
+
+  /// Format time as HH:MM:SS for longer durations
+  String formatLongTime(int seconds) {
+    if (seconds <= 0) return '0:00:00';
+    final hours = seconds ~/ 3600;
+    final mins = (seconds % 3600) ~/ 60;
+    final secs = seconds % 60;
+    return '$hours:${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+  }
+
+  /// Get win count for last 7 days from scores
+  int get winsLast7Days {
+    final now = DateTime.now();
+    final weekAgo = now.subtract(const Duration(days: 7));
+    int count = 0;
+    for (final score in scores) {
+      final parts = score.date.split('/');
+      if (parts.length == 3) {
+        final month = int.tryParse(parts[0]) ?? 0;
+        final day = int.tryParse(parts[1]) ?? 0;
+        final year = int.tryParse(parts[2]) ?? 0;
+        final scoreDate = DateTime(year, month, day);
+        if (scoreDate.isAfter(weekAgo) && score.mistakes < 3) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
+  /// Get best difficulty based on win rate (minimum 3 games played)
+  String? get bestDifficulty {
+    String? best;
+    double bestRate = 0;
+    for (final entry in difficultyStats.entries) {
+      if (entry.value.played >= 3 && entry.value.winRate > bestRate) {
+        bestRate = entry.value.winRate;
+        best = entry.key;
+      }
+    }
+    return best;
+  }
+
+  /// Get most played difficulty
+  String? get mostPlayedDifficulty {
+    String? most;
+    int mostPlayed = 0;
+    for (final entry in difficultyStats.entries) {
+      if (entry.value.played > mostPlayed) {
+        mostPlayed = entry.value.played;
+        most = entry.key;
+      }
+    }
+    return most;
+  }
 
   // Daily challenge helpers
   String get _todayString {
@@ -189,6 +313,17 @@ class GameStore extends ChangeNotifier {
         if (j['completedDifficulties'] != null) {
           completedDifficulties = Set<String>.from(j['completedDifficulties'] as List);
         }
+
+        // Statistics data
+        totalPlayTime = j['totalPlayTime'] ?? 0;
+        if (j['difficultyStats'] != null) {
+          final statsMap = j['difficultyStats'] as Map;
+          for (final key in ['easy', 'medium', 'hard', 'expert']) {
+            if (statsMap[key] != null) {
+              difficultyStats[key] = DifficultyStats.fromJson(statsMap[key] as Map<String, dynamic>);
+            }
+          }
+        }
       } catch (_) {}
     }
     notifyListeners();
@@ -232,6 +367,9 @@ class GameStore extends ChangeNotifier {
       'noHintGames': noHintGames,
       'onlineWins': onlineWins,
       'completedDifficulties': completedDifficulties.toList(),
+      // Statistics data
+      'totalPlayTime': totalPlayTime,
+      'difficultyStats': difficultyStats.map((k, v) => MapEntry(k, v.toJson())),
     }));
   }
 
@@ -251,8 +389,23 @@ class GameStore extends ChangeNotifier {
   void recordWin(String difficulty, int time, int mistakes) {
     played++;
     won++;
+    totalPlayTime += time;
+
+    // Update best time
     final bt = bestTimes[difficulty];
     if (bt == null || time < bt) bestTimes[difficulty] = time;
+
+    // Update difficulty stats
+    final stats = difficultyStats[difficulty];
+    if (stats != null) {
+      stats.played++;
+      stats.won++;
+      stats.totalTime += time;
+      if (stats.fastestTime == 0 || time < stats.fastestTime) {
+        stats.fastestTime = time;
+      }
+    }
+
     scores.insert(0, ScoreEntry(
       diff: difficulty,
       time: time,
@@ -267,6 +420,14 @@ class GameStore extends ChangeNotifier {
 
   void recordLoss(String difficulty, int time, int mistakes) {
     played++;
+    totalPlayTime += time;
+
+    // Update difficulty stats (played only, not won)
+    final stats = difficultyStats[difficulty];
+    if (stats != null) {
+      stats.played++;
+    }
+
     scores.insert(0, ScoreEntry(
       diff: difficulty,
       time: time,
@@ -318,6 +479,7 @@ class GameStore extends ChangeNotifier {
     // Also count as a regular win
     played++;
     won++;
+    totalPlayTime += time;
 
     // Add to scores with "daily" marker
     scores.insert(0, ScoreEntry(
