@@ -49,6 +49,12 @@ class GameState extends ChangeNotifier {
   int? challengeSeed;
   String? challengePin;
 
+  // Online challenge mode
+  bool onlineMode = false;
+  void Function(int filledCells, int mistakes)? onProgressChange;
+  void Function(int totalSeconds)? onGameWon;
+  void Function()? onGameLost;
+
   static const maxMistakes = 3;
 
   bool get hasSelection => selectedRow != null && selectedCol != null;
@@ -57,11 +63,12 @@ class GameState extends ChangeNotifier {
   bool get isGenerating => _generating;
   bool _generating = false;
 
-  Future<void> newGame(String diff, {int? seed, String? pin}) async {
+  Future<void> newGame(String diff, {int? seed, String? pin, bool online = false}) async {
     difficulty = diff;
     challengeMode = seed != null;
     challengeSeed = seed;
     challengePin = pin;
+    onlineMode = online;
 
     // Reset state immediately
     puzzle = [];
@@ -166,12 +173,33 @@ class GameState extends ChangeNotifier {
               if (!isGiven[rr][cc]) board[rr][cc] = solution[rr][cc];
             }
           }
+          // Trigger online lost callback
+          if (onlineMode) onGameLost?.call();
         }
       } else {
         _checkWin();
       }
     }
+    // Notify progress change for online sync
+    _notifyProgressChange();
     notifyListeners();
+  }
+
+  void _notifyProgressChange() {
+    if (!onlineMode || onProgressChange == null) return;
+    final filled = _countFilledCells();
+    onProgressChange!(filled, mistakes);
+  }
+
+  int _countFilledCells() {
+    if (board.isEmpty) return 0;
+    int count = 0;
+    for (var row in board) {
+      for (var cell in row) {
+        if (cell != 0) count++;
+      }
+    }
+    return count;
   }
 
   void eraseCell() {
@@ -182,6 +210,7 @@ class GameState extends ChangeNotifier {
     if (board[r][c] != 0) {
       undoStack.add(UndoEntry(r: r, c: c, type: 'val', prevVal: board[r][c], nextVal: 0, prevNotes: Set.from(notes[r][c])));
       board[r][c] = 0;
+      _notifyProgressChange();
     } else if (notes[r][c].isNotEmpty) {
       undoStack.add(UndoEntry(r: r, c: c, type: 'note', prevNotes: Set.from(notes[r][c]), nextNotes: {}));
       notes[r][c].clear();
@@ -228,6 +257,7 @@ class GameState extends ChangeNotifier {
     hintCells.add('$r,$c');
     selectedRow = r;
     selectedCol = c;
+    _notifyProgressChange();
     _checkWin();
     notifyListeners();
   }
@@ -254,6 +284,8 @@ class GameState extends ChangeNotifier {
     }
     gameOver = true;
     status = GameStatus.won;
+    // Trigger online win callback
+    if (onlineMode) onGameWon?.call(seconds);
   }
 
   int countForNumber(int n) {

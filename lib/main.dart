@@ -1,13 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'state/game_store.dart';
 import 'state/game_state.dart';
 import 'screens/splash_screen.dart';
 import 'screens/home_screen.dart';
 
-void main() {
+bool _firebaseInitialized = false;
+
+Future<void> _initializeFirebase() async {
+  try {
+    // Check if Firebase is already initialized
+    if (Firebase.apps.isNotEmpty) {
+      _firebaseInitialized = true;
+      return;
+    }
+
+    // Initialize Firebase with platform-specific options
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    _firebaseInitialized = true;
+    debugPrint('Firebase initialized successfully');
+  } catch (e) {
+    _firebaseInitialized = false;
+    debugPrint('Firebase initialization failed: $e');
+  }
+}
+
+bool get isFirebaseAvailable => _firebaseInitialized;
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  await _initializeFirebase();
   runApp(const SudokuApp());
 }
 

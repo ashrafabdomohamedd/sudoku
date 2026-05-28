@@ -40,12 +40,17 @@ class _HomeScreenState extends State<HomeScreen> {
     'expert': '22-24 clues',
   };
 
-  void _navigateToGame({int? seed, String? pin, String? diff}) {
+  void _navigateToGame({int? seed, String? pin, String? diff, bool isOnline = false}) {
     final d = diff ?? _difficulty;
-    widget.gameState.newGame(d, seed: seed, pin: pin);
+    widget.gameState.newGame(d, seed: seed, pin: pin, online: isOnline);
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => GameScreen(store: store, gameState: widget.gameState, onToggleTheme: widget.onToggleTheme),
+        builder: (_) => GameScreen(
+          store: store,
+          gameState: widget.gameState,
+          onToggleTheme: widget.onToggleTheme,
+          isOnlineChallenge: isOnline,
+        ),
       ),
     ).then((_) => setState(() {}));
   }
@@ -499,9 +504,13 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (_) => ChallengeModal(
         colors: colors,
         isDark: store.isDark,
+        playerName: store.name,
         onStartChallenge: (diff, seed, pin) {
           Navigator.of(context).pop();
           _navigateToGame(diff: diff, seed: seed, pin: pin);
+        },
+        onStartOnlineChallenge: (diff, seed, pin, isOnline) {
+          _navigateToGame(diff: diff, seed: seed, pin: pin, isOnline: isOnline);
         },
       ),
     );

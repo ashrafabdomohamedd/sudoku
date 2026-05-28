@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "712783270069",
+    "firebase_url": "https://sudoku-challenge-98e4d-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "sudoku-challenge-98e4d",
+    "storage_bucket": "sudoku-challenge-98e4d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:712783270069:android:1739a3d425201a784faefc",
+        "android_client_info": {
+          "package_name": "com.example.sudoku"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA2yelewNOYCo7hAICfrHAbYCZTckgIN6g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
