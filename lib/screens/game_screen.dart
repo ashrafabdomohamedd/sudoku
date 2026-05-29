@@ -9,6 +9,7 @@ import '../widgets/opponent_progress.dart';
 import '../widgets/achievements_modal.dart';
 import '../widgets/coach_marks_overlay.dart';
 import '../services/online_challenge_service.dart';
+import '../services/leaderboard_service.dart';
 import '../services/sound_service.dart';
 import '../models/online_room.dart';
 import '../models/achievement.dart';
@@ -16,18 +17,22 @@ import '../utils/daily_challenge.dart';
 
 class GameScreen extends StatefulWidget {
   final GameStore store;
-  final GameState gameState;
-  final VoidCallback onToggleTheme;
+  final GameState? gameState;
+  final GameState? game; // Alternative parameter name
+  final VoidCallback? onToggleTheme;
   final bool isOnlineChallenge;
   final bool isDailyChallenge;
+  final String? tournamentId;
 
   const GameScreen({
     super.key,
     required this.store,
-    required this.gameState,
-    required this.onToggleTheme,
+    this.gameState,
+    this.game,
+    this.onToggleTheme,
     this.isOnlineChallenge = false,
     this.isDailyChallenge = false,
+    this.tournamentId,
   });
 
   @override
@@ -68,11 +73,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Achievement? _showingAchievement;
   Timer? _achievementDismissTimer;
 
-  GameState get game => widget.gameState;
+  GameState get game => widget.gameState ?? widget.game!;
   GameStore get store => widget.store;
   AppColorScheme get colors => store.isDark ? AppColors.dark : AppColors.light;
   bool get isOnline => widget.isOnlineChallenge;
   bool get isDaily => widget.isDailyChallenge;
+  bool get isTournament => widget.tournamentId != null;
+  final LeaderboardService _leaderboardService = LeaderboardService();
 
   // Calculate progress percentage
   int get _filledCells {
@@ -516,6 +523,28 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         isOnlineWinner: isOnlineWinner,
       );
 
+      // Submit to global leaderboard (not for online challenges)
+      if (!isOnline && store.deviceId != null) {
+        _leaderboardService.submitScore(
+          difficulty: game.difficulty,
+          name: store.name,
+          deviceId: store.deviceId!,
+          time: game.seconds,
+          mistakes: game.mistakes,
+        );
+
+        // Submit to tournament if playing a tournament
+        if (isTournament && widget.tournamentId != null) {
+          _leaderboardService.submitTournamentEntry(
+            tournamentId: widget.tournamentId!,
+            deviceId: store.deviceId!,
+            name: store.name,
+            time: game.seconds,
+            mistakes: game.mistakes,
+          );
+        }
+      }
+
       _sound.playWin();
       setState(() => _showConfetti = true);
       Future.delayed(const Duration(milliseconds: 600), () {
@@ -844,7 +873,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             GestureDetector(
               onTap: () {
                 HapticFeedback.lightImpact();
-                widget.onToggleTheme();
+                widget.onToggleTheme?.call();
               },
               child: Container(
                 width: 38, height: 38,

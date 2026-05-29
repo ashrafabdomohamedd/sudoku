@@ -124,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   // 2. Time-sensitive - Daily Challenge
                   _buildDailyChallengeCard(c),
                   const SizedBox(height: 20),
-                  // 4. Quick Stats Overview
+                  // 3. Quick Stats Overview
                   _buildStats(c),
                   const SizedBox(height: 20),
                   // 5. Historical Data
@@ -152,8 +152,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         Row(
           children: [
-            _iconButton('📚', _showLearning, c),
-            const SizedBox(width: 8),
+            // _iconButton('📚', _showLearning, c),
+            // const SizedBox(width: 8),
             _achievementsButton(c),
             const SizedBox(width: 8),
             _iconButton('⚙️', _showSettings, c),
@@ -932,12 +932,17 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Text('⚔️', style: TextStyle(fontSize: 16)),
             SizedBox(width: 8),
-            Text(
-              'Challenge Friend',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Challenge Friend',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ),
           ],

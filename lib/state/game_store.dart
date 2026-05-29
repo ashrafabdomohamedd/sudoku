@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/achievement.dart';
@@ -142,6 +143,9 @@ class GameStore extends ChangeNotifier {
   bool hasSeenCoachMarks = false;
   // Developer config - set to true to always show coach marks (for testing)
   bool alwaysShowCoachMarks = false;
+
+  // Device ID for anonymous leaderboards
+  String? deviceId;
 
   bool get isDark => theme == 'dark';
 
@@ -343,9 +347,25 @@ class GameStore extends ChangeNotifier {
         hasSeenTutorial = j['hasSeenTutorial'] ?? false;
         hasSeenCoachMarks = j['hasSeenCoachMarks'] ?? false;
         alwaysShowCoachMarks = j['alwaysShowCoachMarks'] ?? false;
+
+        // Device ID
+        deviceId = j['deviceId'];
       } catch (_) {}
     }
+
+    // Generate device ID if not exists
+    if (deviceId == null || deviceId!.isEmpty) {
+      deviceId = _generateDeviceId();
+      save();
+    }
+
     notifyListeners();
+  }
+
+  String _generateDeviceId() {
+    final random = Random.secure();
+    final values = List<int>.generate(16, (i) => random.nextInt(256));
+    return values.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
   void _checkStreakStatus() {
@@ -396,6 +416,8 @@ class GameStore extends ChangeNotifier {
       'hasSeenTutorial': hasSeenTutorial,
       'hasSeenCoachMarks': hasSeenCoachMarks,
       'alwaysShowCoachMarks': alwaysShowCoachMarks,
+      // Device ID
+      'deviceId': deviceId,
     }));
   }
 
