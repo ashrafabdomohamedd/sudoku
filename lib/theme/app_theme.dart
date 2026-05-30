@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'board_themes.dart';
 
 class AppColors {
-  // Light theme
+  // Light theme (default)
   static const light = AppColorScheme(
     bg: Color(0xFFF0F4FF),
     surface: Color(0xFFFFFFFF),
@@ -23,7 +24,7 @@ class AppColors {
     hintColor: Color(0xFF06D6A0),
   );
 
-  // Dark theme
+  // Dark theme (default)
   static const dark = AppColorScheme(
     bg: Color(0xFF0D0F1E),
     surface: Color(0xFF161826),
@@ -44,6 +45,56 @@ class AppColors {
     noteColor: Color(0xFF6870A0),
     hintColor: Color(0xFF06D6A0),
   );
+
+  /// Generate AppColorScheme from a ColorTheme
+  static AppColorScheme fromColorTheme(ColorTheme theme, {required bool isDark}) {
+    final errColor = isDark ? const Color(0xFFFF6B6B) : const Color(0xFFE63946);
+    final hintColor = const Color(0xFF06D6A0);
+
+    if (isDark) {
+      return AppColorScheme(
+        bg: theme.darkBg,
+        surface: theme.darkSurface,
+        surface2: theme.darkSurface2,
+        border: theme.darkBorder,
+        borderBox: theme.darkBorderBox,
+        text: theme.darkText,
+        textMuted: theme.darkTextMuted,
+        primary: theme.primaryColor,
+        primaryLight: theme.darkPrimaryLight,
+        selBg: theme.darkSelBg,
+        hlBg: theme.darkHlBg,
+        sameBg: theme.darkSameBg,
+        errColor: errColor,
+        errBg: theme.darkErrBg,
+        givenColor: theme.darkText,
+        userColor: theme.primaryColor,
+        noteColor: theme.darkTextMuted,
+        hintColor: hintColor,
+      );
+    } else {
+      return AppColorScheme(
+        bg: theme.lightBg,
+        surface: theme.lightSurface,
+        surface2: theme.lightSurface2,
+        border: theme.lightBorder,
+        borderBox: theme.lightBorderBox,
+        text: theme.lightText,
+        textMuted: theme.lightTextMuted,
+        primary: theme.primaryColor,
+        primaryLight: theme.lightPrimaryLight,
+        selBg: theme.lightSelBg,
+        hlBg: theme.lightHlBg,
+        sameBg: theme.lightSameBg,
+        errColor: errColor,
+        errBg: theme.lightErrBg,
+        givenColor: theme.lightText,
+        userColor: theme.primaryColor,
+        noteColor: theme.lightTextMuted,
+        hintColor: hintColor,
+      );
+    }
+  }
 }
 
 class AppColorScheme {

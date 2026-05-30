@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
+import '../theme/board_themes.dart';
 import '../state/game_store.dart';
 import '../state/game_state.dart';
 import '../screens/game_screen.dart';
@@ -17,8 +18,15 @@ class HomeScreen extends StatefulWidget {
   final GameStore store;
   final GameState gameState;
   final VoidCallback onToggleTheme;
+  final String? initialChallengePin; // Deep link challenge PIN
 
-  const HomeScreen({super.key, required this.store, required this.gameState, required this.onToggleTheme});
+  const HomeScreen({
+    super.key,
+    required this.store,
+    required this.gameState,
+    required this.onToggleTheme,
+    this.initialChallengePin,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -39,6 +47,13 @@ class _HomeScreenState extends State<HomeScreen> {
         _updateCountdown();
       }
     });
+
+    // Auto-show challenge modal if opened via deep link
+    if (widget.initialChallengePin != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showChallengeModal(initialPin: widget.initialChallengePin);
+      });
+    }
   }
 
   @override
@@ -54,7 +69,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   GameStore get store => widget.store;
-  AppColorScheme get colors => store.isDark ? AppColors.dark : AppColors.light;
+  AppColorScheme get colors {
+    final theme = ColorThemes.fromId(store.colorThemeId);
+    return AppColors.fromColorTheme(theme, isDark: store.isDark);
+  }
 
   // Difficulty icons
   static const _diffIcons = {
@@ -662,15 +680,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Secondary buttons
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-            child: Row(
-              children: [
-                if (store.savedGame != null) ...[
-                  Expanded(child: _buildContinueButton(c)),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(child: _buildChallengeButton(c)),
-              ],
-            ),
+            child: _buildChallengeButton(c),
           ),
         ],
       ),
@@ -726,6 +736,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final stats = store.getStatsForDifficulty(diff);
     final winRate = stats.played > 0 ? (stats.winRate * 100).toInt() : null;
 
+    // Check if there's a saved game for this difficulty
+    final hasSavedGame = store.savedGame?.difficulty == diff;
+    final savedTime = hasSavedGame ? store.savedGame!.seconds : 0;
+
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
@@ -738,8 +752,8 @@ class _HomeScreenState extends State<HomeScreen> {
           color: c.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? color : c.border,
-            width: isSelected ? 2.5 : 1,
+            color: isSelected ? color : (hasSavedGame ? c.primary : c.border),
+            width: isSelected ? 2.5 : (hasSavedGame ? 2 : 1),
           ),
         ),
         child: Column(
@@ -796,20 +810,54 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                Icon(
-                  Icons.emoji_events_outlined,
-                  size: 12,
-                  color: bestTime != null ? c.primary : c.textMuted,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  bestTime != null ? _fmtTime(bestTime) : 'No record',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: bestTime != null ? c.text : c.textMuted,
+                // Best time or Continue indicator
+                if (hasSavedGame) ...[
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _continueGame();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF4F6EF7), Color(0xFFA855F7)],
+                        ),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.play_arrow_rounded, size: 14, color: Colors.white),
+                          const SizedBox(width: 3),
+                          Text(
+                            _fmtTime(savedTime),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                ] else ...[
+                  Icon(
+                    Icons.emoji_events_outlined,
+                    size: 12,
+                    color: bestTime != null ? c.primary : c.textMuted,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    bestTime != null ? _fmtTime(bestTime) : 'No record',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: bestTime != null ? c.text : c.textMuted,
+                    ),
+                  ),
+                ],
               ],
             ),
           ],
@@ -870,47 +918,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildContinueButton(AppColorScheme c) {
-    final savedTime = store.savedGame?.seconds ?? 0;
-
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        _continueGame();
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-        decoration: BoxDecoration(
-          color: c.surface,
-          border: Border.all(color: c.primary, width: 1.5),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.play_circle_outline, color: c.primary, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              'Continue',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: c.primary,
-              ),
-            ),
-            Text(
-              ' · ${_fmtTime(savedTime)}',
-              style: TextStyle(
-                fontSize: 12,
-                color: c.textMuted,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildChallengeButton(AppColorScheme c) {
     return GestureDetector(
       onTap: () {
@@ -937,17 +944,12 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Text('⚔️', style: TextStyle(fontSize: 16)),
             SizedBox(width: 8),
-            Expanded(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  'Challenge Friend',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
+            Text(
+              'Challenge Friend',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
               ),
             ),
           ],
@@ -1021,13 +1023,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _showChallengeModal() {
+  void _showChallengeModal({String? initialPin}) {
     showDialog(
       context: context,
       builder: (_) => ChallengeModal(
         colors: colors,
         isDark: store.isDark,
         playerName: store.name,
+        initialPin: initialPin,
         onStartChallenge: (diff, seed, pin) {
           Navigator.of(context).pop();
           _navigateToGame(diff: diff, seed: seed, pin: pin);

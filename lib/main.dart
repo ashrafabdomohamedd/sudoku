@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -6,11 +7,13 @@ import 'state/game_store.dart';
 import 'state/game_state.dart';
 import 'services/sound_service.dart';
 import 'services/ad_service.dart';
+import 'services/deep_link_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/home_screen.dart';
 import 'widgets/gdpr_consent_dialog.dart';
 import 'widgets/legal_modal.dart';
 import 'theme/app_theme.dart';
+import 'theme/board_themes.dart';
 
 bool _firebaseInitialized = false;
 
@@ -57,6 +60,11 @@ class _SudokuAppState extends State<SudokuApp> {
   bool _loaded = false;
   bool _showGdprConsent = false;
 
+  // Deep link handling
+  final DeepLinkService _deepLinkService = DeepLinkService();
+  StreamSubscription<DeepLinkData>? _deepLinkSubscription;
+  String? _pendingChallengePin;
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +75,10 @@ class _SudokuAppState extends State<SudokuApp> {
       if (_store.gdprConsentGiven && _store.adsConsent) {
         await AdService().initialize();
       }
+
+      // Initialize deep links
+      await _deepLinkService.initialize();
+      _deepLinkSubscription = _deepLinkService.linkStream.listen(_handleDeepLink);
 
       setState(() {
         _loaded = true;
@@ -83,6 +95,34 @@ class _SudokuAppState extends State<SudokuApp> {
     });
   }
 
+  @override
+  void dispose() {
+    _deepLinkSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _handleDeepLink(DeepLinkData data) {
+    debugPrint('Main: Handling deep link - $data');
+
+    if (data.type == DeepLinkType.challenge && data.challengePin != null) {
+      // Store the pin and show challenge dialog when ready
+      _pendingChallengePin = data.challengePin;
+
+      // If app is loaded and not showing splash, show the challenge dialog
+      if (_loaded && !_showSplash && !_showGdprConsent && navigatorKey.currentContext != null) {
+        _showChallengeFromDeepLink();
+      }
+    }
+  }
+
+  void _showChallengeFromDeepLink() {
+    if (_pendingChallengePin == null) return;
+
+    // Rebuild the home screen with the challenge PIN
+    // This will trigger the modal to show automatically
+    setState(() {});
+  }
+
   /// Initialize ads after consent is given
   Future<void> _initializeAdsAfterConsent() async {
     if (_store.adsConsent) {
@@ -94,7 +134,10 @@ class _SudokuAppState extends State<SudokuApp> {
     _store.toggleTheme();
   }
 
-  AppColorScheme get _colors => _store.isDark ? AppColors.dark : AppColors.light;
+  AppColorScheme get _colors {
+    final theme = ColorThemes.fromId(_store.colorThemeId);
+    return AppColors.fromColorTheme(theme, isDark: _store.isDark);
+  }
 
   void _showPrivacyPolicy() {
     showDialog(
@@ -152,10 +195,15 @@ class _SudokuAppState extends State<SudokuApp> {
       });
     }
 
+    // Consume the pending challenge PIN
+    final challengePin = _pendingChallengePin;
+    _pendingChallengePin = null;
+
     return HomeScreen(
       store: _store,
       gameState: _gameState,
       onToggleTheme: _toggleTheme,
+      initialChallengePin: challengePin,
     );
   }
 }

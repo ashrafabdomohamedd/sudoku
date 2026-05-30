@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../utils/challenge_utils.dart';
 import '../main.dart' show isFirebaseAvailable;
 import '../services/online_challenge_service.dart';
+import '../services/share_service.dart';
 import '../models/online_room.dart';
 
 class ChallengeModal extends StatefulWidget {
@@ -15,6 +16,7 @@ class ChallengeModal extends StatefulWidget {
   final void Function(String difficulty, int seed, String pin) onStartChallenge;
   final void Function(String difficulty, int seed, String pin, bool isOnline)? onStartOnlineChallenge;
   final String playerName;
+  final String? initialPin; // Pre-fill PIN from deep link
 
   const ChallengeModal({
     super.key,
@@ -23,6 +25,7 @@ class ChallengeModal extends StatefulWidget {
     required this.onStartChallenge,
     this.onStartOnlineChallenge,
     this.playerName = 'Player',
+    this.initialPin,
   });
 
   @override
@@ -47,6 +50,16 @@ class _ChallengeModalState extends State<ChallengeModal> {
   OnlineRoom? _currentRoom;
 
   AppColorScheme get c => widget.colors;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill PIN from deep link and switch to Join tab
+    if (widget.initialPin != null && widget.initialPin!.isNotEmpty) {
+      _isCreateTab = false;
+      _pinController.text = widget.initialPin!;
+    }
+  }
 
   void _generate() async {
     _seed = Random().nextInt(99999) + 1;
@@ -394,26 +407,23 @@ class _ChallengeModalState extends State<ChallengeModal> {
         const SizedBox(height: 14),
         Row(
           children: [
+            // Share button
             Expanded(
               child: GestureDetector(
                 onTap: () {
-                  final txt = _isOnlineMode
-                      ? '🌐 Online Sudoku Challenge!\nPIN: $_pin\nDifficulty: $_cDiff\nJoin now for real-time play!'
-                      : '⚔️ Sudoku Challenge!\nPIN: $_pin\nDifficulty: $_cDiff';
-                  Clipboard.setData(ClipboardData(text: txt));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied!')));
+                  ShareService().shareChallenge(pin: _pin, difficulty: _cDiff);
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   decoration: BoxDecoration(
                     color: c.surface,
-                    border: Border.all(color: c.border, width: 1.5),
+                    border: Border.all(color: c.primary, width: 1.5),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    '📋 Copy',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: c.text),
+                    '📤 Share',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: c.primary),
                   ),
                 ),
               ),
@@ -491,15 +501,13 @@ class _ChallengeModalState extends State<ChallengeModal> {
           ),
         ),
         const SizedBox(height: 16),
-        // Copy and Cancel buttons
+        // Share and Cancel buttons
         Row(
           children: [
             Expanded(
               child: GestureDetector(
                 onTap: () {
-                  final txt = '🌐 Online Sudoku Challenge!\nPIN: $_pin\nDifficulty: $_cDiff\nJoin now!';
-                  Clipboard.setData(ClipboardData(text: txt));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PIN copied!')));
+                  ShareService().shareChallenge(pin: _pin, difficulty: _cDiff);
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 13),
@@ -509,7 +517,7 @@ class _ChallengeModalState extends State<ChallengeModal> {
                   ),
                   alignment: Alignment.center,
                   child: const Text(
-                    '📋 Share PIN',
+                    '📤 Share',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white),
                   ),
                 ),

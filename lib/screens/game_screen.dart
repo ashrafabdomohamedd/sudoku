@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
+import '../theme/board_themes.dart';
 import '../state/game_store.dart';
 import '../state/game_state.dart';
 import '../widgets/confetti_overlay.dart';
 import '../widgets/opponent_progress.dart';
 import '../widgets/achievements_modal.dart';
 import '../widgets/coach_marks_overlay.dart';
+import '../widgets/theme_picker.dart';
 import '../services/online_challenge_service.dart';
 import '../services/leaderboard_service.dart';
 import '../services/sound_service.dart';
@@ -79,7 +81,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   GameState get game => widget.gameState ?? widget.game!;
   GameStore get store => widget.store;
-  AppColorScheme get colors => store.isDark ? AppColors.dark : AppColors.light;
+  AppColorScheme get colors {
+    final theme = ColorThemes.fromId(store.colorThemeId);
+    return AppColors.fromColorTheme(theme, isDark: store.isDark);
+  }
+
+  BoardStyle get boardStyle => BoardStyles.fromId(store.boardStyleId);
   bool get isOnline => widget.isOnlineChallenge;
   bool get isDaily => widget.isDailyChallenge;
   bool get isTournament => widget.tournamentId != null;
@@ -893,10 +900,19 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 ),
               ),
             const SizedBox(width: 8),
+            // Theme picker button
+            QuickThemeButton(
+              store: store,
+              colors: c,
+              onThemeChanged: () => setState(() {}),
+            ),
+            const SizedBox(width: 8),
+            // Dark/light mode toggle
             GestureDetector(
               onTap: () {
                 HapticFeedback.lightImpact();
                 widget.onToggleTheme?.call();
+                setState(() {});
               },
               child: Container(
                 width: 38, height: 38,
@@ -999,13 +1015,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildBoard(AppColorScheme c) {
+    final bs = boardStyle;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: c.border),
-        boxShadow: [BoxShadow(color: c.primary.withValues(alpha: 0.1), blurRadius: 24, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(color: c.primary.withValues(alpha: 0.1), blurRadius: 24, offset: const Offset(0, 4)),
+          if (bs.hasOuterGlow) BoxShadow(color: c.primary.withValues(alpha: 0.3), blurRadius: 12),
+        ],
       ),
       child: Stack(
         children: [
@@ -1087,16 +1107,24 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       textColor = col.userColor;
     }
 
-    // Borders
-    final rightBorder = (c == 2 || c == 5 || c == 8) ? BorderSide(color: col.borderBox, width: 2.5) : BorderSide(color: col.border, width: 0.5);
-    final bottomBorder = (r == 2 || r == 5 || r == 8) ? BorderSide(color: col.borderBox, width: 2.5) : BorderSide(color: col.border, width: 0.5);
-    final leftBorder = c == 0 ? BorderSide(color: col.borderBox, width: 2.5) : BorderSide.none;
-    final topBorder = r == 0 ? BorderSide(color: col.borderBox, width: 2.5) : BorderSide.none;
+    // Borders - use board style settings
+    final bs = boardStyle;
+    final boxWidth = bs.boxBorderWidth;
+    final cellWidth = bs.cellBorderWidth;
+    final rightBorder = (c == 2 || c == 5 || c == 8) ? BorderSide(color: col.borderBox, width: boxWidth) : BorderSide(color: col.border, width: cellWidth);
+    final bottomBorder = (r == 2 || r == 5 || r == 8) ? BorderSide(color: col.borderBox, width: boxWidth) : BorderSide(color: col.border, width: cellWidth);
+    final leftBorder = c == 0 ? BorderSide(color: col.borderBox, width: boxWidth) : BorderSide.none;
+    final topBorder = r == 0 ? BorderSide(color: col.borderBox, width: boxWidth) : BorderSide.none;
 
     Widget cellContent = Container(
+      margin: EdgeInsets.all(bs.cellSpacing),
       decoration: BoxDecoration(
         color: bgColor,
         border: Border(right: rightBorder, bottom: bottomBorder, left: leftBorder, top: topBorder),
+        borderRadius: BorderRadius.circular(bs.cellBorderRadius),
+        boxShadow: bs.hasInnerShadow && !isSel
+            ? [BoxShadow(color: col.border.withValues(alpha: 0.3), blurRadius: 2, offset: const Offset(1, 1))]
+            : null,
       ),
       alignment: Alignment.center,
       child: val != 0

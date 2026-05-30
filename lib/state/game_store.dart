@@ -152,6 +152,10 @@ class GameStore extends ChangeNotifier {
   bool analyticsConsent = false;
   bool adsConsent = false;
 
+  // Theme Settings
+  String colorThemeId = 'default'; // Color theme ID from ColorThemes
+  String boardStyleId = 'classic'; // Board style ID from BoardStyles
+
   bool get isDark => theme == 'dark';
   bool get needsGdprConsent => !gdprConsentGiven;
 
@@ -361,6 +365,10 @@ class GameStore extends ChangeNotifier {
         gdprConsentGiven = j['gdprConsentGiven'] ?? false;
         analyticsConsent = j['analyticsConsent'] ?? false;
         adsConsent = j['adsConsent'] ?? false;
+
+        // Theme Settings
+        colorThemeId = j['colorThemeId'] ?? 'default';
+        boardStyleId = j['boardStyleId'] ?? 'classic';
       } catch (_) {}
     }
 
@@ -433,11 +441,26 @@ class GameStore extends ChangeNotifier {
       'gdprConsentGiven': gdprConsentGiven,
       'analyticsConsent': analyticsConsent,
       'adsConsent': adsConsent,
+      // Theme Settings
+      'colorThemeId': colorThemeId,
+      'boardStyleId': boardStyleId,
     }));
   }
 
   void toggleTheme() {
     theme = isDark ? 'light' : 'dark';
+    save();
+    notifyListeners();
+  }
+
+  void setColorTheme(String themeId) {
+    colorThemeId = themeId;
+    save();
+    notifyListeners();
+  }
+
+  void setBoardStyle(String styleId) {
+    boardStyleId = styleId;
     save();
     notifyListeners();
   }

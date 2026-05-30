@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
+import '../theme/board_themes.dart';
 import '../state/game_store.dart';
 import '../services/rate_app_service.dart';
+import '../services/share_service.dart';
 import 'learning_modal.dart';
 import 'achievements_modal.dart';
 import 'legal_modal.dart';
+import 'theme_picker.dart';
 
 class SettingsModal extends StatefulWidget {
   final GameStore store;
@@ -32,6 +35,11 @@ class _SettingsModalState extends State<SettingsModal> {
 
   AppColorScheme get c => widget.colors;
   GameStore get store => widget.store;
+
+  AppColorScheme _getCurrentColors() {
+    final theme = ColorThemes.fromId(store.colorThemeId);
+    return AppColors.fromColorTheme(theme, isDark: store.isDark);
+  }
 
   @override
   void initState() {
@@ -155,6 +163,22 @@ class _SettingsModalState extends State<SettingsModal> {
                         activeThumbColor: c.primary,
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    _actionRow(
+                      icon: '🎨',
+                      title: 'Themes',
+                      subtitle: '${ColorThemes.fromId(store.colorThemeId).name} · ${BoardStyles.fromId(store.boardStyleId).name}',
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        showDialog(
+                          context: context,
+                          builder: (_) => ThemePickerModal(
+                            store: store,
+                            colors: _getCurrentColors(),
+                          ),
+                        ).then((_) => setState(() {}));
+                      },
+                    ),
                     const SizedBox(height: 20),
 
                     // Sound & Haptics Section
@@ -237,6 +261,16 @@ class _SettingsModalState extends State<SettingsModal> {
                         HapticFeedback.lightImpact();
                         final service = RateAppService();
                         await service.openStoreListing();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _actionRow(
+                      icon: '📤',
+                      title: 'Share App',
+                      subtitle: 'Invite friends to play Sudoku',
+                      onTap: () async {
+                        HapticFeedback.lightImpact();
+                        await ShareService().shareApp();
                       },
                     ),
                     const SizedBox(height: 20),
