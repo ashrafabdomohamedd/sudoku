@@ -10,6 +10,7 @@ import '../widgets/achievements_modal.dart';
 import '../widgets/statistics_modal.dart';
 import '../widgets/settings_modal.dart';
 import '../widgets/learning_modal.dart';
+import '../widgets/banner_ad_widget.dart';
 import '../utils/daily_challenge.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -101,6 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print('store.adsConsent: ${store.adsConsent}');
     final c = colors;
     return Scaffold(
       backgroundColor: c.bg,
@@ -131,6 +133,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   _sectionLabel('Recent Scores', c),
                   const SizedBox(height: 9),
                   _buildScores(c),
+                  const SizedBox(height: 20),
+                  // Banner Ad
+                  if (store.adsConsent) const BannerAdWidget(),
                 ],
               ),
             ),

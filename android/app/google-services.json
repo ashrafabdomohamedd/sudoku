@@ -1,14 +1,14 @@
 {
   "project_info": {
-    "project_number": "712783270069",
-    "firebase_url": "https://sudoku-challenge-98e4d-default-rtdb.europe-west1.firebasedatabase.app",
-    "project_id": "sudoku-challenge-98e4d",
-    "storage_bucket": "sudoku-challenge-98e4d.firebasestorage.app"
+    "project_number": "758236903398",
+    "firebase_url": "https://sudoku-96650-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "sudoku-96650",
+    "storage_bucket": "sudoku-96650.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:712783270069:android:1739a3d425201a784faefc",
+        "mobilesdk_app_id": "1:758236903398:android:44cb8b231f4ae1f9ec8827",
         "android_client_info": {
           "package_name": "com.example.sudoku"
         }
@@ -16,7 +16,26 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyA2yelewNOYCo7hAICfrHAbYCZTckgIN6g"
+          "current_key": "AIzaSyA6i5MSz6yIGRK7ZP1lbZ3Q7cobxvnWOlU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:758236903398:android:19f4b2a49203d7d5ec8827",
+        "android_client_info": {
+          "package_name": "com.rocketgamestation.sudoku"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA6i5MSz6yIGRK7ZP1lbZ3Q7cobxvnWOlU"
         }
       ],
       "services": {

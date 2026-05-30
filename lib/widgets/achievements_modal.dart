@@ -559,15 +559,46 @@ class _LeaderboardTabState extends State<_LeaderboardTab>
   }
 
   Widget _buildEmptyState() {
+    final isFirebaseAvailable = _service.isAvailable;
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('🏆', style: TextStyle(fontSize: 40, color: c.textMuted)),
+          Text(isFirebaseAvailable ? '🏆' : '⚠️', style: TextStyle(fontSize: 40, color: c.textMuted)),
           const SizedBox(height: 12),
-          Text('No scores yet!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.text)),
+          Text(
+            isFirebaseAvailable ? 'No scores yet!' : 'Leaderboard Unavailable',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.text),
+          ),
           const SizedBox(height: 4),
-          Text('Be the first to complete a puzzle', style: TextStyle(fontSize: 13, color: c.textMuted)),
+          Text(
+            isFirebaseAvailable
+                ? 'Be the first to complete a puzzle'
+                : 'Check your internet connection',
+            style: TextStyle(fontSize: 13, color: c.textMuted),
+          ),
+          if (!isFirebaseAvailable) ...[
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: _loadLeaderboard,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: c.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Retry',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: c.primary,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

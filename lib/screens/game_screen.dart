@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../state/game_store.dart';
 import '../state/game_state.dart';
@@ -11,6 +12,9 @@ import '../widgets/coach_marks_overlay.dart';
 import '../services/online_challenge_service.dart';
 import '../services/leaderboard_service.dart';
 import '../services/sound_service.dart';
+import '../services/rate_app_service.dart';
+import '../services/ad_service.dart';
+import '../widgets/rate_app_dialog.dart';
 import '../models/online_room.dart';
 import '../models/achievement.dart';
 import '../utils/daily_challenge.dart';
@@ -80,6 +84,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   bool get isDaily => widget.isDailyChallenge;
   bool get isTournament => widget.tournamentId != null;
   final LeaderboardService _leaderboardService = LeaderboardService();
+  final RateAppService _rateAppService = RateAppService();
+  final AdService _adService = AdService();
+
+  // Track games completed for interstitial ad frequency
+  int _gamesCompletedSinceAd = 0;
+  static const int _gamesBeforeInterstitial = 3; // Show ad every 3 games
 
   // Calculate progress percentage
   int get _filledCells {
@@ -547,6 +557,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
       _sound.playWin();
       setState(() => _showConfetti = true);
+
+      // Track games for interstitial ad
+      _gamesCompletedSinceAd++;
+
+      // Check for rate prompt after perfect win (0 mistakes)
+      if (game.mistakes == 0) {
+        _checkRatePrompt();
+      }
+
       Future.delayed(const Duration(milliseconds: 600), () {
         if (mounted) _showWinDialog();
       });
@@ -556,6 +575,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       if (!isDaily) {
         store.recordLoss(game.difficulty, game.seconds, game.mistakes);
       }
+
+      // Track games for interstitial ad
+      _gamesCompletedSinceAd++;
+
       _sound.playLose();
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) _showLoseDialog();
@@ -1213,10 +1236,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         const SizedBox(width: 8),
         KeyedSubtree(
           key: _hintKey,
-          child: _actionBtn('💡', 'Hint', 'H', false, () {
-            _sound.playHint();
-            game.giveHint();
-          }, c),
+          child: _actionBtn('💡', 'Hint', 'H', false, () => _onHintPressed(c), c),
         ),
       ],
     );
@@ -1268,23 +1288,25 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       );
     }
 
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.mediumImpact();
-        _newGame();
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 15),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Color(0xFF4F6EF7), Color(0xFFA855F7)]),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: const Color(0xFF4F6EF7).withValues(alpha: 0.35), blurRadius: 18, offset: const Offset(0, 4))],
-        ),
-        alignment: Alignment.center,
-        child: const Text('New Game', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5)),
-      ),
-    );
+    return SizedBox();
+
+    // return GestureDetector(
+    //   onTap: () {
+    //     HapticFeedback.mediumImpact();
+    //     _newGame();
+    //   },
+    //   child: Container(
+    //     width: double.infinity,
+    //     padding: const EdgeInsets.symmetric(vertical: 15),
+    //     decoration: BoxDecoration(
+    //       gradient: const LinearGradient(colors: [Color(0xFF4F6EF7), Color(0xFFA855F7)]),
+    //       borderRadius: BorderRadius.circular(14),
+    //       boxShadow: [BoxShadow(color: const Color(0xFF4F6EF7).withValues(alpha: 0.35), blurRadius: 18, offset: const Offset(0, 4))],
+    //     ),
+    //     alignment: Alignment.center,
+    //     child: const Text('New Game', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5)),
+    //   ),
+    // );
   }
 
   (Color, Color) _getDifficultyColors(String diff) {
@@ -1326,7 +1348,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         mistakes: '${game.mistakes}',
         difficulty: game.difficulty[0].toUpperCase() + game.difficulty.substring(1),
         onPlayAgain: () { Navigator.pop(context); _newGame(); },
-        onHome: () { Navigator.pop(context); Navigator.pop(context); },
+        onHome: () async {
+          Navigator.pop(context);
+          await _maybeShowInterstitialAd();
+          if (mounted) Navigator.pop(context);
+        },
       ),
     );
   }
@@ -1347,7 +1373,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       builder: (_) => _LoseDialog(
         colors: c,
         onTryAgain: () { Navigator.pop(context); _newGame(); },
-        onHome: () { Navigator.pop(context); Navigator.pop(context); },
+        onHome: () async {
+          Navigator.pop(context);
+          await _maybeShowInterstitialAd();
+          if (mounted) Navigator.pop(context);
+        },
       ),
     );
   }
@@ -1477,6 +1507,168 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
+  /// Handle hint button press - show ad dialog if ads enabled
+  void _onHintPressed(AppColorScheme c) {
+    // If ads not enabled or no ad ready, give free hint
+    if (!store.adsConsent || !_adService.isRewardedAdReady) {
+      _sound.playHint();
+      game.giveHint();
+      return;
+    }
+
+    // Show dialog offering free hint or watch ad
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: c.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('💡', style: TextStyle(fontSize: 40)),
+              const SizedBox(height: 12),
+              Text(
+                'Need a Hint?',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: c.text,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Watch a short video to reveal one cell',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: c.textMuted,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              // Watch Ad Button
+              GestureDetector(
+                onTap: () async {
+                  Navigator.pop(context);
+                  final rewarded = await _adService.showRewardedAd(
+                    onUserEarnedReward: () {
+                      _sound.playHint();
+                      game.giveHint();
+                    },
+                  );
+                  if (!rewarded && mounted) {
+                    // Ad failed, give hint anyway
+                    _sound.playHint();
+                    game.giveHint();
+                  }
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF4F6EF7), Color(0xFFA855F7)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.play_circle_fill, color: Colors.white, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Watch Ad for Hint',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Cancel Button
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: c.surface2,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: c.border),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: c.text,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Show interstitial ad if conditions are met
+  Future<void> _maybeShowInterstitialAd() async {
+    // Only show if user consented to ads
+    if (!store.adsConsent) return;
+
+    // Only show every N games
+    if (_gamesCompletedSinceAd < _gamesBeforeInterstitial) return;
+
+    // Don't show during online matches (disruptive)
+    if (isOnline) return;
+
+    // Show the ad
+    final shown = await _adService.showInterstitialAd();
+    if (shown) {
+      _gamesCompletedSinceAd = 0; // Reset counter
+    }
+  }
+
+  Future<void> _checkRatePrompt() async {
+    final shouldPrompt = await _rateAppService.recordPerfectWin();
+    if (shouldPrompt && mounted) {
+      // Delay slightly to not interrupt win celebration
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => RateAppDialog(
+              colors: colors,
+              onRate: () async {
+                Navigator.pop(context);
+                await _rateAppService.requestReview();
+              },
+              onLater: () {
+                Navigator.pop(context);
+                _rateAppService.dismissPrompt();
+              },
+              onNever: () async {
+                Navigator.pop(context);
+                // Mark as "rated" so we never ask again
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('has_rated_app', true);
+              },
+            ),
+          );
+        }
+      });
+    }
+  }
+
   String _fmtTime(int s) => '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
 }
 
@@ -1484,7 +1676,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 class _WinDialog extends StatelessWidget {
   final AppColorScheme colors;
   final String time, mistakes, difficulty;
-  final VoidCallback onPlayAgain, onHome;
+  final VoidCallback onPlayAgain;
+  final Function() onHome; // Can be async
 
   const _WinDialog({required this.colors, required this.time, required this.mistakes, required this.difficulty, required this.onPlayAgain, required this.onHome});
 
@@ -1538,7 +1731,8 @@ class _WinDialog extends StatelessWidget {
 // ── Lose Dialog ──
 class _LoseDialog extends StatelessWidget {
   final AppColorScheme colors;
-  final VoidCallback onTryAgain, onHome;
+  final VoidCallback onTryAgain;
+  final Function() onHome; // Can be async
 
   const _LoseDialog({required this.colors, required this.onTryAgain, required this.onHome});
 

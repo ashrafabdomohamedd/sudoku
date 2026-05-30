@@ -147,7 +147,13 @@ class GameStore extends ChangeNotifier {
   // Device ID for anonymous leaderboards
   String? deviceId;
 
+  // GDPR/Privacy Consent
+  bool gdprConsentGiven = false;
+  bool analyticsConsent = false;
+  bool adsConsent = false;
+
   bool get isDark => theme == 'dark';
+  bool get needsGdprConsent => !gdprConsentGiven;
 
   // Achievement helpers
   int get unlockedCount => unlockedAchievements.length;
@@ -350,6 +356,11 @@ class GameStore extends ChangeNotifier {
 
         // Device ID
         deviceId = j['deviceId'];
+
+        // GDPR Consent
+        gdprConsentGiven = j['gdprConsentGiven'] ?? false;
+        analyticsConsent = j['analyticsConsent'] ?? false;
+        adsConsent = j['adsConsent'] ?? false;
       } catch (_) {}
     }
 
@@ -418,6 +429,10 @@ class GameStore extends ChangeNotifier {
       'alwaysShowCoachMarks': alwaysShowCoachMarks,
       // Device ID
       'deviceId': deviceId,
+      // GDPR Consent
+      'gdprConsentGiven': gdprConsentGiven,
+      'analyticsConsent': analyticsConsent,
+      'adsConsent': adsConsent,
     }));
   }
 
@@ -439,6 +454,32 @@ class GameStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Set GDPR consent with all options accepted
+  void acceptAllConsent() {
+    gdprConsentGiven = true;
+    analyticsConsent = true;
+    adsConsent = true;
+    save();
+    notifyListeners();
+  }
+
+  /// Set GDPR consent with only essential (no analytics/ads)
+  void acceptEssentialOnly() {
+    gdprConsentGiven = true;
+    analyticsConsent = false;
+    adsConsent = false;
+    save();
+    notifyListeners();
+  }
+
+  /// Update specific consent settings
+  void updateConsent({bool? analytics, bool? ads}) {
+    if (analytics != null) analyticsConsent = analytics;
+    if (ads != null) adsConsent = ads;
+    save();
+    notifyListeners();
+  }
+
   void markTutorialSeen() {
     hasSeenTutorial = true;
     save();
@@ -452,8 +493,8 @@ class GameStore extends ChangeNotifier {
   }
 
   /// Check if coach marks should be shown (TODO: remove)
-  // bool get shouldShowCoachMarks => alwaysShowCoachMarks || !hasSeenCoachMarks;
-  bool get shouldShowCoachMarks => true;
+  bool get shouldShowCoachMarks => alwaysShowCoachMarks || !hasSeenCoachMarks;
+  // bool get shouldShowCoachMarks => true;
 
   void updateProfile(String newName, String newColor) {
     name = newName.isNotEmpty ? newName : name;

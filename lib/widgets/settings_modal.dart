@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../state/game_store.dart';
+import '../services/rate_app_service.dart';
 import 'learning_modal.dart';
 import 'achievements_modal.dart';
+import 'legal_modal.dart';
 
 class SettingsModal extends StatefulWidget {
   final GameStore store;
@@ -224,6 +226,63 @@ class _SettingsModalState extends State<SettingsModal> {
                             colors: c,
                           ),
                         );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _actionRow(
+                      icon: '⭐',
+                      title: 'Rate App',
+                      subtitle: 'Love the app? Leave a review!',
+                      onTap: () async {
+                        HapticFeedback.lightImpact();
+                        final service = RateAppService();
+                        await service.openStoreListing();
+                      },
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Legal Section
+                    _sectionTitle('Legal'),
+                    const SizedBox(height: 12),
+                    _actionRow(
+                      icon: '🔒',
+                      title: 'Privacy Policy',
+                      subtitle: 'How we handle your data',
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        showDialog(
+                          context: context,
+                          builder: (_) => LegalModal(
+                            colors: c,
+                            documentType: LegalDocumentType.privacyPolicy,
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _actionRow(
+                      icon: '📜',
+                      title: 'Terms of Service',
+                      subtitle: 'Terms and conditions',
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        showDialog(
+                          context: context,
+                          builder: (_) => LegalModal(
+                            colors: c,
+                            documentType: LegalDocumentType.termsOfService,
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _actionRow(
+                      icon: '🍪',
+                      title: 'Privacy Settings',
+                      subtitle: 'Manage consent preferences',
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        _showPrivacySettings();
                       },
                     ),
                     const SizedBox(height: 20),
@@ -522,6 +581,132 @@ class _SettingsModalState extends State<SettingsModal> {
             Icon(Icons.arrow_forward_ios, size: 16, color: c.textMuted),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showPrivacySettings() {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: c.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text('🍪', style: TextStyle(fontSize: 24)),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Privacy Settings',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: c.text,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              _buildPrivacyToggle(
+                title: 'Analytics',
+                description: 'Help us improve with anonymous usage data',
+                value: store.analyticsConsent,
+                onChanged: (v) {
+                  store.updateConsent(analytics: v);
+                  setState(() {});
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildPrivacyToggle(
+                title: 'Personalized Ads',
+                description: 'Show ads relevant to your interests',
+                value: store.adsConsent,
+                onChanged: (v) {
+                  store.updateConsent(ads: v);
+                  setState(() {});
+                },
+              ),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF4F6EF7), Color(0xFFA855F7)],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    'Done',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrivacyToggle({
+    required String title,
+    required String description,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.surface2.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: c.text,
+                  ),
+                ),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: c.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeTrackColor: c.primary.withValues(alpha: 0.5),
+            activeThumbColor: c.primary,
+          ),
+        ],
       ),
     );
   }

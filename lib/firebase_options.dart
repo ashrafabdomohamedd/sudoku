@@ -41,53 +41,53 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDtYJYOIJhE-vUIynepsolPZPonYyTVpXM',
-    appId: '1:712783270069:web:9720a97db621007e4faefc',
-    messagingSenderId: '712783270069',
-    projectId: 'sudoku-challenge-98e4d',
-    authDomain: 'sudoku-challenge-98e4d.firebaseapp.com',
-    databaseURL: 'https://sudoku-challenge-98e4d-default-rtdb.europe-west1.firebasedatabase.app',
-    storageBucket: 'sudoku-challenge-98e4d.firebasestorage.app',
-    measurementId: 'G-N6C1QG9VB4',
+    apiKey: 'AIzaSyC7LeammhZEguj_j4qLeULtqPyy5DY7NCs',
+    appId: '1:758236903398:web:4c8c8caf53adf438ec8827',
+    messagingSenderId: '758236903398',
+    projectId: 'sudoku-96650',
+    authDomain: 'sudoku-96650.firebaseapp.com',
+    databaseURL: 'https://sudoku-96650-default-rtdb.europe-west1.firebasedatabase.app',
+    storageBucket: 'sudoku-96650.firebasestorage.app',
+    measurementId: 'G-WR9K96L8GE',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyA2yelewNOYCo7hAICfrHAbYCZTckgIN6g',
-    appId: '1:712783270069:android:1739a3d425201a784faefc',
-    messagingSenderId: '712783270069',
-    projectId: 'sudoku-challenge-98e4d',
-    databaseURL: 'https://sudoku-challenge-98e4d-default-rtdb.europe-west1.firebasedatabase.app',
-    storageBucket: 'sudoku-challenge-98e4d.firebasestorage.app',
+    apiKey: 'AIzaSyA6i5MSz6yIGRK7ZP1lbZ3Q7cobxvnWOlU',
+    appId: '1:758236903398:android:19f4b2a49203d7d5ec8827',
+    messagingSenderId: '758236903398',
+    projectId: 'sudoku-96650',
+    databaseURL: 'https://sudoku-96650-default-rtdb.europe-west1.firebasedatabase.app',
+    storageBucket: 'sudoku-96650.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAYyzQdUZJfcIjElRAshirDSDHapxZ4em8',
-    appId: '1:712783270069:ios:364877b45542e4a24faefc',
-    messagingSenderId: '712783270069',
-    projectId: 'sudoku-challenge-98e4d',
-    databaseURL: 'https://sudoku-challenge-98e4d-default-rtdb.europe-west1.firebasedatabase.app',
-    storageBucket: 'sudoku-challenge-98e4d.firebasestorage.app',
-    iosBundleId: 'com.example.sudoku',
+    apiKey: 'AIzaSyCOA6NrAVaZcbT29MGmwhkhdTyzTG5-1DA',
+    appId: '1:758236903398:ios:7fc739391a8c4d5cec8827',
+    messagingSenderId: '758236903398',
+    projectId: 'sudoku-96650',
+    databaseURL: 'https://sudoku-96650-default-rtdb.europe-west1.firebasedatabase.app',
+    storageBucket: 'sudoku-96650.firebasestorage.app',
+    iosBundleId: 'com.rocketgamestation.sudoku',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyAYyzQdUZJfcIjElRAshirDSDHapxZ4em8',
-    appId: '1:712783270069:ios:364877b45542e4a24faefc',
-    messagingSenderId: '712783270069',
-    projectId: 'sudoku-challenge-98e4d',
-    databaseURL: 'https://sudoku-challenge-98e4d-default-rtdb.europe-west1.firebasedatabase.app',
-    storageBucket: 'sudoku-challenge-98e4d.firebasestorage.app',
-    iosBundleId: 'com.example.sudoku',
+    apiKey: 'AIzaSyCOA6NrAVaZcbT29MGmwhkhdTyzTG5-1DA',
+    appId: '1:758236903398:ios:7fc739391a8c4d5cec8827',
+    messagingSenderId: '758236903398',
+    projectId: 'sudoku-96650',
+    databaseURL: 'https://sudoku-96650-default-rtdb.europe-west1.firebasedatabase.app',
+    storageBucket: 'sudoku-96650.firebasestorage.app',
+    iosBundleId: 'com.rocketgamestation.sudoku',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyDtYJYOIJhE-vUIynepsolPZPonYyTVpXM',
-    appId: '1:712783270069:web:4f80c3d299f6fbb74faefc',
-    messagingSenderId: '712783270069',
-    projectId: 'sudoku-challenge-98e4d',
-    authDomain: 'sudoku-challenge-98e4d.firebaseapp.com',
-    databaseURL: 'https://sudoku-challenge-98e4d-default-rtdb.europe-west1.firebasedatabase.app',
-    storageBucket: 'sudoku-challenge-98e4d.firebasestorage.app',
-    measurementId: 'G-B7LPMFTB0Z',
+    apiKey: 'AIzaSyC7LeammhZEguj_j4qLeULtqPyy5DY7NCs',
+    appId: '1:758236903398:web:69aecd637211b1c6ec8827',
+    messagingSenderId: '758236903398',
+    projectId: 'sudoku-96650',
+    authDomain: 'sudoku-96650.firebaseapp.com',
+    databaseURL: 'https://sudoku-96650-default-rtdb.europe-west1.firebasedatabase.app',
+    storageBucket: 'sudoku-96650.firebasestorage.app',
+    measurementId: 'G-9JCQBJ5JLG',
   );
 }

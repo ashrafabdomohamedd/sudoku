@@ -1,4 +1,6 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
 
 class LeaderboardEntry {
   final String id;
@@ -115,21 +117,42 @@ class LeaderboardService {
   factory LeaderboardService() => _instance;
   LeaderboardService._internal();
 
-  final DatabaseReference _db = FirebaseDatabase.instance.ref();
+  DatabaseReference? _dbRef;
+
+  DatabaseReference get _db {
+    _dbRef ??= FirebaseDatabase.instance.ref();
+    return _dbRef!;
+  }
+
+  /// Check if Firebase is available
+  bool get isAvailable {
+    try {
+      return Firebase.apps.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // GLOBAL LEADERBOARDS
   // ═══════════════════════════════════════════════════════════════════════════
 
   /// Submit a score to the global leaderboard
-  Future<void> submitScore({
+  Future<bool> submitScore({
     required String difficulty,
     required String name,
     required String deviceId,
     required int time,
     required int mistakes,
   }) async {
+    if (!isAvailable) {
+      debugPrint('LeaderboardService: Firebase not available, skipping score submit');
+      return false;
+    }
+
     try {
+      debugPrint('LeaderboardService: Submitting score - $name, $difficulty, ${time}s, $mistakes mistakes');
+
       final ref = _db.child('leaderboards/$difficulty').push();
       await ref.set({
         'name': name,
@@ -139,28 +162,43 @@ class LeaderboardService {
         'timestamp': ServerValue.timestamp,
       });
 
+      debugPrint('LeaderboardService: Score submitted successfully!');
+
       // Clean up old entries - keep only top 500
       await _pruneLeaderboard(difficulty);
+      return true;
     } catch (e) {
-      // Silently fail - don't break the game
-      print('Failed to submit score: $e');
+      debugPrint('LeaderboardService: Failed to submit score: $e');
+      return false;
     }
   }
 
   /// Get top scores for a difficulty
   Future<List<LeaderboardEntry>> getTopScores(String difficulty, {int limit = 100}) async {
+    if (!isAvailable) {
+      debugPrint('LeaderboardService: Firebase not available, returning empty leaderboard');
+      return [];
+    }
+
     try {
+      debugPrint('LeaderboardService: Fetching top scores for $difficulty...');
+
       final snapshot = await _db
           .child('leaderboards/$difficulty')
           .orderByChild('time')
           .limitToFirst(limit)
           .get();
 
-      if (!snapshot.exists || snapshot.value == null) return [];
+      if (!snapshot.exists || snapshot.value == null) {
+        debugPrint('LeaderboardService: No scores found for $difficulty');
+        return [];
+      }
 
       final data = snapshot.value as Map<dynamic, dynamic>;
+      debugPrint('LeaderboardService: Found ${data.length} entries for $difficulty');
+
       final entries = data.entries
-          .map((e) => LeaderboardEntry.fromJson(e.key, e.value))
+          .map((e) => LeaderboardEntry.fromJson(e.key.toString(), e.value as Map<dynamic, dynamic>))
           .toList();
 
       // Sort by time (ascending), then by mistakes (ascending)
@@ -172,7 +210,7 @@ class LeaderboardService {
 
       return entries;
     } catch (e) {
-      print('Failed to get leaderboard: $e');
+      debugPrint('LeaderboardService: Failed to get leaderboard: $e');
       return [];
     }
   }
